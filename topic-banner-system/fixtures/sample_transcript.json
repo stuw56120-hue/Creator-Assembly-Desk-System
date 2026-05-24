@@ -1,0 +1,36 @@
+{
+  "job_id": "sample-job-001",
+  "transcript": [
+    { "start_ms": 0,      "end_ms": 5200,  "text": "Welcome back everyone to the show. Really excited for today's episode.", "speaker_id": "host" },
+    { "start_ms": 5200,   "end_ms": 10800, "text": "We're diving into productivity systems and how they can completely transform your workflow.", "speaker_id": "host" },
+    { "start_ms": 10800,  "end_ms": 17000, "text": "I've been using this particular method for about six months and the results have been incredible.", "speaker_id": "host" },
+    { "start_ms": 17000,  "end_ms": 24000, "text": "The core principle is what I call async-first thinking. You batch your decisions, you reduce context switching.", "speaker_id": "host" },
+    { "start_ms": 24000,  "end_ms": 31000, "text": "Instead of reacting to every notification, you carve out protected blocks for deep work. It sounds simple but the discipline required is enormous.", "speaker_id": "host" },
+    { "start_ms": 31000,  "end_ms": 38000, "text": "I started by auditing my calendar and removing every recurring meeting that didn't have a clear output. That freed up nearly twelve hours a week.", "speaker_id": "host" },
+    { "start_ms": 38000,  "end_ms": 45500, "text": "The second lever is environment design. Where you work, the physical and digital setup, shapes how much cognitive load you carry into each task.", "speaker_id": "host" },
+    { "start_ms": 47200,  "end_ms": 54000, "text": "Now I want to shift gears completely and talk about the future of remote work, which is a topic I know our listeners are really passionate about.", "speaker_id": "guest" },
+    { "start_ms": 54000,  "end_ms": 61000, "text": "Remote work has fundamentally changed how companies operate. We're still in the very early stages of understanding the long-term effects.", "speaker_id": "guest" },
+    { "start_ms": 61000,  "end_ms": 68000, "text": "The talent distribution is shifting. Companies that fully embrace distributed teams have access to a global pool instead of a fifty-mile radius.", "speaker_id": "guest" },
+    { "start_ms": 68000,  "end_ms": 76000, "text": "But the coordination overhead is real. You need intentional culture-building, asynchronous documentation, and leadership that communicates in writing.", "speaker_id": "guest" },
+    { "start_ms": 76000,  "end_ms": 84000, "text": "The tools are catching up fast. AI-assisted project management, async video, virtual offices — they're reducing the friction of being distributed.", "speaker_id": "guest" },
+    { "start_ms": 84000,  "end_ms": 92000, "text": "Companies that crack the remote culture code will have a massive competitive advantage over the next decade. That's not a prediction, it's already happening.", "speaker_id": "guest" },
+    { "start_ms": 93800,  "end_ms": 100000, "text": "Great points. Let's open up the Q and A section. We have some fantastic questions from our listeners that came in this week.", "speaker_id": "host" },
+    { "start_ms": 100000, "end_ms": 107000, "text": "First question comes from Marcus in Toronto. He asks: how do you balance deep work with the constant communication demands of modern teams?", "speaker_id": "host" },
+    { "start_ms": 107000, "end_ms": 115000, "text": "That tension is at the heart of everything we're discussing. The answer is structured time blocks and ruthless prioritisation of which conversations actually need to happen synchronously.", "speaker_id": "guest" },
+    { "start_ms": 115000, "end_ms": 123000, "text": "You have to protect your deep work time the same way you'd protect a meeting with your most important client. It's non-negotiable.", "speaker_id": "guest" },
+    { "start_ms": 123000, "end_ms": 131000, "text": "Second question from Amara in Lagos: what's the single biggest mistake you see founders make when transitioning to a remote-first model?", "speaker_id": "host" },
+    { "start_ms": 131000, "end_ms": 139000, "text": "Recreating the office online. Trying to replicate the physical experience with video calls all day. It burns people out and you lose all the flexibility benefits.", "speaker_id": "guest" },
+    { "start_ms": 139000, "end_ms": 148000, "text": "The magic of remote is async. Write things down, trust your team to respond thoughtfully, and stop optimising for speed of reply over quality of thinking.", "speaker_id": "guest" }
+  ],
+  "detection_profile": "podcast",
+  "face_zones": [
+    { "x": 0.55, "y": 0.1, "width": 0.35, "height": 0.4 }
+  ],
+  "render_context": {
+    "resolution": "1080p",
+    "scale_factor": 1.0
+  },
+  "threshold_overrides": {
+    "major_similarity_threshold": 0.1
+  }
+}
