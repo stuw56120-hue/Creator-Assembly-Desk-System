@@ -1,0 +1,15 @@
+{
+  "ingest": {
+    "whisper_model": "base",
+    "language": "en",
+    "audio_sample_rate": 16000,
+    "audio_channels": 1,
+    "silence_threshold_db": -35,
+    "min_silence_seconds": 0.5
+  },
+  "render": {
+    "longform_preset": "longform",
+    "short_preset": "short",
+    "proxy_preset": "proxy"
+  }
+}

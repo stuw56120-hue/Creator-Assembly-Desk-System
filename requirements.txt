@@ -1,0 +1,8 @@
+# C.A.D.S. Python workers
+# - faster-whisper: transcription (Step 1 ingest app / transcribe_worker.py)
+# - rembg + onnxruntime: local background removal (u2net) for image onboarding
+# - Pillow: image loading, Gaussian blur, JPEG/PNG output
+faster-whisper>=1.0.0
+rembg>=2.0.57
+Pillow>=10.0.0
+onnxruntime>=1.16.0

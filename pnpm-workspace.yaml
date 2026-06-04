@@ -1,0 +1,14 @@
+# pnpm reads build-script approvals here. true = run the package's install/build
+# script, false = skip it (acknowledged, so pnpm won't keep prompting).
+#   electron  — downloads the Electron binary (required to run the app)
+#   esbuild   — installs its native platform binary (required for build:main)
+#   sharp     — prebuilt image-processing binaries used by Hyperframes renders
+# The AI / TTS / background-removal native deps are Hyperframes "media skills"
+# that CADS never invokes (it only renders motion graphics), so they're skipped.
+allowBuilds:
+  electron: true
+  esbuild: true
+  sharp: true
+  '@google/genai': false
+  onnxruntime-node: false
+  protobufjs: false

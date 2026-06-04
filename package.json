@@ -1,0 +1,36 @@
+{
+  "name": "creator-studio",
+  "version": "0.1.0",
+  "description": "C.A.D.S. — Creator Automated Development System",
+  "private": true,
+  "author": "",
+  "license": "Apache-2.0",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build:main": "node scripts/build-main.mjs",
+    "build:renderer": "vite build",
+    "build": "pnpm run build:renderer && pnpm run build:main",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^30.0.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "hyperframes": "^0.6.44",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.25.76",
+    "zustand": "^4.5.7"
+  }
+}

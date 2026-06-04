@@ -1,0 +1,18 @@
+node_modules/
+dist/
+dist-electron/
+*.local
+.DS_Store
+.vite/
+
+# Vendored Hyperframes source — porting reference only, not part of the build.
+hyperframes-main/
+
+# C.A.D.S. runtime output (projects, library, temp renders)
+*.log
+logs/
+tmp/
+
+# Python
+__pycache__/
+*.pyc

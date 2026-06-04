@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "fps": 30,
+    "backdropColour": "#0a0a0a"
+  },
+  "minimumDurationSeconds": {
+    "intro_title": 2.5,
+    "topic_banner": 2.0,
+    "lower_third": 2.5,
+    "quote_card": 2.5,
+    "subscribe_flash": 1.5,
+    "punch_in": 0.8
+  },
+  "defaultPlacement": {
+    "topic_banner": "left_center",
+    "lower_third": "lower_left",
+    "subscribe_flash": "lower_right",
+    "quote_card": "center",
+    "intro_title": "center",
+    "punch_in": "center"
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "topic_banner": {
+    "label": "Topic Change Banner",
+    "compositionPath": "compositions/topic-banner/composition.html",
+    "thumbnail": "compositions/topic-banner/thumb.png",
+    "defaultDuration": 3.4,
+    "params": {
+      "title": { "type": "string", "required": true },
+      "subtitle": { "type": "string" },
+      "text": { "type": "string" },
+      "accent_colour": { "type": "color", "default": "#00c2ff" },
+      "animation_in": {
+        "type": "enum",
+        "values": ["slide_left", "fade", "pop"],
+        "default": "slide_left"
+      },
+      "placement": { "type": "string", "default": "left_center" },
+      "duration": { "type": "number", "default": 3.4 }
+    }
+  },
+  "lower_third": {
+    "label": "Lower Third",
+    "compositionPath": "compositions/lower-third/composition.html",
+    "thumbnail": "compositions/lower-third/thumb.png",
+    "defaultDuration": 4,
+    "params": {
+      "name": { "type": "string", "required": true },
+      "title": { "type": "string" },
+      "text": { "type": "string" },
+      "brand_colour": { "type": "color", "default": "#3b82f6" },
+      "placement": { "type": "string", "default": "lower_left" },
+      "duration": { "type": "number", "default": 4 }
+    }
+  },
+  "subscribe_flash": {
+    "label": "Subscribe Flash",
+    "compositionPath": "compositions/subscribe-flash/composition.html",
+    "thumbnail": "compositions/subscribe-flash/thumb.png",
+    "defaultDuration": 2.5,
+    "params": {
+      "platform": { "type": "string", "default": "YouTube" },
+      "text": { "type": "string", "default": "Subscribe" },
+      "accent_colour": { "type": "color", "default": "#ff0000" },
+      "placement": { "type": "string", "default": "lower_right" },
+      "duration": { "type": "number", "default": 2.5 }
+    }
+  },
+  "quote_card": {
+    "label": "Quote Card",
+    "compositionPath": "compositions/quote-card/composition.html",
+    "thumbnail": "compositions/quote-card/thumb.png",
+    "defaultDuration": 4,
+    "params": {
+      "text": { "type": "string", "required": true },
+      "attribution": { "type": "string" },
+      "accent_colour": { "type": "color", "default": "#00c2ff" },
+      "background_opacity": { "type": "number", "default": 0.85 },
+      "placement": { "type": "string", "default": "center" },
+      "duration": { "type": "number", "default": 4 }
+    }
+  },
+  "intro_title": {
+    "label": "Intro Title",
+    "compositionPath": "compositions/intro-title/composition.html",
+    "thumbnail": "compositions/intro-title/thumb.png",
+    "defaultDuration": 3,
+    "params": {
+      "title": { "type": "string", "required": true },
+      "subtitle": { "type": "string" },
+      "text": { "type": "string" },
+      "background_colour": { "type": "color", "default": "#0a0a0a" },
+      "font_colour": { "type": "color", "default": "#ffffff" },
+      "placement": { "type": "string", "default": "center" },
+      "duration": { "type": "number", "default": 3 }
+    }
+  },
+  "punch_in": {
+    "label": "Punch In",
+    "compositionPath": "compositions/punch-in/composition.html",
+    "thumbnail": "compositions/punch-in/thumb.png",
+    "defaultDuration": 1.2,
+    "params": {
+      "purpose": { "type": "string" },
+      "text": { "type": "string" },
+      "placement": { "type": "string", "default": "center" },
+      "duration": { "type": "number", "default": 1.2 }
+    }
+  },
+  "meme_pop_in": {
+    "label": "Meme Pop-In",
+    "compositionPath": "compositions/meme-pop-in/composition.html",
+    "thumbnail": "compositions/meme-pop-in/thumb.png",
+    "defaultDuration": 1.8,
+    "params": {
+      "image": { "type": "string" },
+      "text": { "type": "string" },
+      "accent_colour": { "type": "color", "default": "#ffcc00" },
+      "placement": { "type": "string", "default": "center" },
+      "duration": { "type": "number", "default": 1.8 }
+    }
+  },
+  "side_panel_image": {
+    "label": "Side Panel Image",
+    "compositionPath": "compositions/side-panel-image/composition.html",
+    "thumbnail": "compositions/side-panel-image/thumb.png",
+    "defaultDuration": 4,
+    "params": {
+      "image": { "type": "string" },
+      "text": { "type": "string" },
+      "caption": { "type": "string" },
+      "side": { "type": "string", "default": "right" },
+      "background_opacity": { "type": "number", "default": 0.9 },
+      "placement": { "type": "string", "default": "right_center" },
+      "duration": { "type": "number", "default": 4 }
+    }
+  },
+  "caption_highlight": {
+    "label": "Caption Highlight",
+    "compositionPath": "compositions/components/caption-highlight.html",
+    "defaultDuration": 8,
+    "params": {
+      "duration": { "type": "number", "default": 8 }
+    }
+  },
+  "caption_kinetic_slam": {
+    "label": "Caption Kinetic Slam",
+    "compositionPath": "compositions/components/caption-kinetic-slam.html",
+    "defaultDuration": 8,
+    "params": {
+      "duration": { "type": "number", "default": 8 }
+    }
+  },
+  "caption_texture": {
+    "label": "Caption Texture",
+    "compositionPath": "compositions/components/caption-texture.html",
+    "defaultDuration": 8,
+    "params": {
+      "texture": {
+        "type": "enum",
+        "values": ["concrete-042-a", "marble-012", "wood-066", "lava", "rock-058", "metal-046-b"],
+        "default": "lava"
+      },
+      "duration": { "type": "number", "default": 8 }
+    }
+  },
+  "grain_overlay": {
+    "label": "Grain Overlay",
+    "compositionPath": "compositions/components/grain-overlay.html",
+    "params": {
+      "opacity": { "type": "number", "default": 0.15 },
+      "speed": { "type": "number", "default": 0.5 },
+      "texture": { "type": "string" },
+      "z_index": { "type": "number", "default": 100 }
+    }
+  },
+  "whip_pan": {
+    "label": "Whip Pan",
+    "compositionPath": "compositions/whip-pan.html",
+    "defaultDuration": 4,
+    "params": {
+      "duration": { "type": "number", "default": 4 }
+    }
+  },
+  "x_post": {
+    "label": "X Post",
+    "compositionPath": "compositions/x-post.html",
+    "defaultDuration": 5,
+    "params": {
+      "display_name": { "type": "string", "default": "Hyperframes" },
+      "handle": { "type": "string", "default": "@hyperframes" },
+      "tweet_text": {
+        "type": "string",
+        "default": "Prompt to replace this text with your tweet. Change the display name, handle, timestamp, and engagement counts to match your content. #YourHashtag"
+      },
+      "likes": { "type": "string", "default": "10.9K" },
+      "retweets": { "type": "string", "default": "2.3K" },
+      "duration": { "type": "number", "default": 5 }
+    }
+  }
+}

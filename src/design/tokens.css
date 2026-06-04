@@ -1,0 +1,317 @@
+/*
+ * C.A.D.S. design tokens — ported verbatim from the HyperFrames Design System.
+ *
+ * Source: hyperframes-main/DESIGN.md (HyperFrames, Apache License 2.0).
+ * Ported per the C.A.D.S. specification ("Apply verbatim", "Carry the Apache
+ * 2.0 attribution comment in every ported file").
+ *
+ * Copyright HeyGen / HyperFrames contributors.
+ * Licensed under the Apache License, Version 2.0.
+ * http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+/* IBM Plex Mono + Inter, per DESIGN.md. Falls back to system fonts offline
+ * (CSP in index.html permits fonts.googleapis.com / fonts.gstatic.com). */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap");
+
+/* ── Light Mode (default :root) ─────────────────────────────────────────── */
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface2: #eeedea;
+  --border: #e0dfdb;
+  --border-light: #d0cfcb;
+  --text: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #999999;
+  --heading: #0a0a0a;
+  --code-bg: #ffffff;
+
+  /* Accent colors (light) */
+  --accent-green: #1a7a0a;
+  --accent-green-light: rgba(26, 122, 10, 0.07);
+  --accent-green-border: rgba(26, 122, 10, 0.25);
+  --accent-blue: #2563eb;
+  --accent-blue-light: rgba(37, 99, 235, 0.06);
+  --accent-blue-border: rgba(37, 99, 235, 0.2);
+  --accent-purple: #7c3aed;
+  --accent-purple-light: rgba(124, 58, 237, 0.06);
+  --accent-purple-border: rgba(124, 58, 237, 0.2);
+
+  /* Syntax highlighting (light) */
+  --syntax-keyword: #9333ea;
+  --syntax-function: #0891b2;
+  --syntax-string: #16a34a;
+  --syntax-number: #d97706;
+  --syntax-property: #6366f1;
+  --syntax-punctuation: #aaaaaa;
+  --syntax-tag: #b45309;
+  --syntax-attribute: #555555;
+  --syntax-comment: #bbbbbb;
+
+  /* Selection (light) */
+  --selection: rgba(128, 128, 128, 0.2);
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --font-display: "ABC Solar Display", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SF Mono", "Fira Code", monospace;
+
+  /* Type scale (size / weight / letter-spacing / line-height) */
+  --font-size-h1: clamp(2.6rem, 6vw, 4.5rem);
+  --font-weight-h1: 400;
+  --tracking-h1: -0.02em;
+  --leading-h1: 1;
+
+  --font-size-h2: clamp(1.6rem, 3.5vw, 2.2rem);
+  --font-weight-h2: 400;
+  --tracking-h2: -0.02em;
+  --leading-h2: 1.2;
+
+  --font-size-h3: 1rem;
+  --font-weight-h3: 600;
+  --tracking-h3: -0.01em;
+  --leading-h3: 1.4;
+
+  --font-size-body: 1rem;
+  --font-weight-body: 400;
+  --leading-body: 1.6;
+
+  --font-size-body-sm: 0.95rem;
+  --leading-body-sm: 1.7;
+
+  --font-size-caption: 0.82rem;
+  --leading-caption: 1.6;
+
+  --font-size-code: 0.75rem;
+  --leading-code: 1.9;
+
+  --font-size-mono-sm: 0.65rem;
+  --font-weight-mono-sm: 500;
+  --leading-mono-sm: 1.6;
+
+  /* ── Spacing ─────────────────────────────────────────────────────────── */
+  --space-xs: 0.25rem; /* 4px  — tight gaps */
+  --space-sm: 0.5rem; /* 8px  — small gaps */
+  --space-md: 1rem; /* 16px — default gaps */
+  --space-lg: 1.5rem; /* 24px — section gaps */
+  --space-xl: 2rem; /* 32px — large spacing */
+  --space-2xl: 4rem; /* 64px — section padding */
+  --space-3xl: 8rem; /* 128px — hero/footer padding */
+
+  /* ── Border Radius ───────────────────────────────────────────────────── */
+  --radius-sm: 4px; /* badges, small elements */
+  --radius-md: 6px; /* buttons, inputs */
+  --radius-lg: 8px; /* cards, panels */
+  --radius-xl: 12px; /* large cards */
+
+  /* ── Effects ─────────────────────────────────────────────────────────── */
+  --blur-nav: blur(12px);
+}
+
+/* ── Dark Mode ──────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface2: #1a1a1a;
+  --border: #2a2a2a;
+  --border-light: #3a3a3a;
+  --text: #e5e5e5;
+  --text-secondary: #a0a0a0;
+  --text-tertiary: #666666;
+  --heading: #f5f5f5;
+  --code-bg: #141414;
+
+  /* Accent colors (dark) */
+  --accent-green: #22c55e;
+  --accent-green-light: rgba(34, 197, 94, 0.1);
+  --accent-green-border: rgba(34, 197, 94, 0.3);
+  --accent-blue: #3b82f6;
+  --accent-blue-light: rgba(59, 130, 246, 0.1);
+  --accent-blue-border: rgba(59, 130, 246, 0.3);
+  --accent-purple: #a78bfa;
+  --accent-purple-light: rgba(167, 139, 250, 0.1);
+  --accent-purple-border: rgba(167, 139, 250, 0.3);
+
+  /* Syntax highlighting (dark) */
+  --syntax-keyword: #c084fc;
+  --syntax-function: #22d3ee;
+  --syntax-string: #4ade80;
+  --syntax-number: #fbbf24;
+  --syntax-property: #818cf8;
+  --syntax-punctuation: #666666;
+  --syntax-tag: #fb923c;
+  --syntax-attribute: #a0a0a0;
+  --syntax-comment: #555555;
+
+  /* Selection (dark) */
+  --selection: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Base reset & element typography ────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-h1);
+  letter-spacing: var(--tracking-h1);
+  line-height: var(--leading-h1);
+  color: var(--heading);
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-h2);
+  letter-spacing: var(--tracking-h2);
+  line-height: var(--leading-h2);
+  color: var(--heading);
+}
+
+h3 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-h3);
+  letter-spacing: var(--tracking-h3);
+  line-height: var(--leading-h3);
+  color: var(--heading);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
+
+/* ── Component patterns (from DESIGN.md) ────────────────────────────────── */
+
+/* Flat, minimal aesthetic — borders over shadows. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.card:hover {
+  border-color: var(--border-light);
+}
+
+.btn-primary {
+  font-size: 0.8rem;
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--heading);
+  color: #fff;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .btn-primary {
+  background: var(--heading);
+  color: #0a0a0a;
+}
+
+.terminal {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Indeterminate progress sweep (motion-graphics engine download). */
+@keyframes cads-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+.cads-indeterminate {
+  animation: cads-indeterminate 1.1s ease-in-out infinite;
+}
+
+/* Inline in-button spinner. Pure CSS — no icon dependency. Inherits the
+ * button's currentColor so it visually belongs to whichever button hosts it. */
+@keyframes cads-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cads-spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: cads-spin 0.7s linear infinite;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+.terminal-bar {
+  display: flex;
+  gap: 5px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-light);
+}
+
+.terminal-body {
+  padding: 0.85rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: var(--leading-code);
+}
+
+.badge-green {
+  color: var(--accent-green);
+  background: var(--accent-green-light);
+  border: 1px solid var(--accent-green-border);
+}
+
+.badge-blue {
+  color: var(--accent-blue);
+  background: var(--accent-blue-light);
+  border: 1px solid var(--accent-blue-border);
+}
+
+.badge-purple {
+  color: var(--accent-purple);
+  background: var(--accent-purple-light);
+  border: 1px solid var(--accent-purple-border);
+}

@@ -1,0 +1,25 @@
+{
+  "longform": {
+    "videoCodec": "libx264",
+    "pixelFormat": "yuv420p",
+    "audioCodec": "aac",
+    "preset": "medium",
+    "crf": 20
+  },
+  "short": {
+    "videoCodec": "libx264",
+    "pixelFormat": "yuv420p",
+    "audioCodec": "aac",
+    "preset": "medium",
+    "crf": 20,
+    "width": 1080,
+    "height": 1920
+  },
+  "proxy": {
+    "videoCodec": "libx264",
+    "audioCodec": "aac",
+    "preset": "veryfast",
+    "crf": 28,
+    "scaleHeight": 540
+  }
+}
