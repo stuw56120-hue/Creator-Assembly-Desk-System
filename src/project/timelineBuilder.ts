@@ -285,23 +285,41 @@ export function buildTimeline(editList: EditList): BuiltTimeline {
   }
 
   // ── Shorts (S1–S4) — one span row each ──────────────────────────────────
+  // Handles both schemas: v1 (start_time/end_time + string hook) and Shorts
+  // Schema v2 (segments[] + object hook). For a v2 short the timeline marker
+  // starts at the first segment and spans the assembled length (segments are
+  // non-contiguous in the source); the SS-5 inspector replaces this with a real
+  // per-segment view.
   editList.shorts.forEach((short, index) => {
-    const start = parseTimecode(short.start_time);
-    const out = parseTimecode(short.end_time);
+    const segments = Array.isArray(short.segments) ? short.segments : [];
+    const hookText = typeof short.hook === "string" ? short.hook : short.hook?.text ?? "";
+    let start: number;
+    let duration: number;
+    if (segments.length > 0) {
+      start = parseTimecode(segments[0].start_time);
+      duration = segments.reduce(
+        (acc, s) => acc + Math.max(0, parseTimecode(s.end_time) - parseTimecode(s.start_time)),
+        0,
+      );
+    } else {
+      start = short.start_time ? parseTimecode(short.start_time) : 0;
+      const out = short.end_time ? parseTimecode(short.end_time) : start;
+      duration = Math.max(0, out - start);
+    }
     events.push({
       id: short.short_id,
       kind: "short_in",
-      label: short.hook.trim() || short.title || short.short_id,
+      label: hookText.trim() || short.title || short.short_id,
       start,
-      duration: Math.max(0, out - start),
+      duration,
       track: TRACK.shortsBase + index,
       enabled: true,
       locked: false,
-      reviewRequired: shortNeedsReview(short.hook),
+      reviewRequired: shortNeedsReview(hookText),
       confidence: short.confidence,
       shortData: {
         shortId: short.short_id,
-        hook: short.hook,
+        hook: hookText,
         captionStyle: short.caption_style,
         aspectRatio: short.framing?.aspect_ratio ?? "9:16",
         notes: short.notes,

@@ -3,6 +3,7 @@ dist/
 dist-electron/
 *.local
 .DS_Store
+desktop.ini
 .vite/
 
 # Vendored Hyperframes source — porting reference only, not part of the build.

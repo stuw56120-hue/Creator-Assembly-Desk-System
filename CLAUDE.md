@@ -1,6 +1,6 @@
 # C.A.D.S. — Claude Code Master Briefing
 ## Come And Discuss Spurs / Creator Automated Development System
-### Last updated: 03 June 2026
+### Last updated: 07 June 2026
 
 ---
 
@@ -40,7 +40,7 @@ Work autonomously to completion. Stuart is not a developer. Do not ask him about
 
 4. **Check integration points.** If new code touches existing systems, verify the join — the existing system receives what it expects, and the new code handles what the existing system returns.
 
-5. **Run `pnpm test`.** 204 tests must still pass after every step. Every new step must add its own tests. If tests fail, fix them before presenting.
+5. **Run `pnpm test`.** 430 tests must still pass after every step. Every new step must add its own tests. If tests fail, fix them before presenting.
 
 ### Presenting completed work:
 - Lead with what was built and whether it passed smoke checks and tests
@@ -57,266 +57,200 @@ Work autonomously to completion. Stuart is not a developer. Do not ask him about
 - **GitHub:** https://github.com/stuw56120-hue/Creator-Assembly-Desk-System
 - **Package manager:** pnpm
 - **Node:** v24.16.0 | **npm:** v11.13.0
+- **Git:** installed at `C:\Program Files\Git\cmd\git.exe`
 
 ---
 
-## WHAT HAS BEEN BUILT — DO NOT REBUILD ANY OF THIS
+## TRUE STATE OF THE CODEBASE — READ CAREFULLY
 
-The entire CADS v2 build order (all 19 steps) plus the Asset Onboarding System addendum plus the full ingest flow are complete. **204 tests pass across 16 test files.** The app is a real end-to-end product.
+**430 tests pass across 31 test files. The app boots and runs.**
 
-### Completed and working:
+### What is built and working:
 - Electron + React shell (boots cleanly)
 - Full app router: **Setup → New Project (Ingest) → Import → Editor**
 - Setup screen — one-time Projects folder + Asset Library folder pickers (persisted to `userData/cads-settings.json`)
 - Ingest screen — drag in Zoom MP4 + optional VTT, language + Whisper model selector, Go button, live terminal log, green Ready screen with Open Submission Folder button
 - Import screen — paste JSON or browse for JSON file, validation with inline errors, "Load sample project" shortcut
-- Timeline editor — all tracks (cuts, motion graphics, chapters, shorts, images)
-- Asset library + onboarding UI
+- Timeline editor — longform tracks (cuts, motion graphics, chapters, images)
+- Asset library + onboarding UI + Clean Library button
 - Image processing worker (original, blur, cutout variants via rembg — ~176MB model already downloaded)
 - Background removal (rembg, local, fully offline)
-- Motion graphics via Hyperframes CLI (topic_banner, lower_third, subscribe_flash, quote_card, intro_title, punch_in, meme_pop_in, side_panel_image)
-- Newly installed Hyperframes components (caption_highlight, caption_kinetic_slam, caption_texture, grain_overlay, whip_pan, x_post) — registered in template-registry.json, **not yet wired into render pipeline**
-- FFmpeg render pipeline — long-form + shorts + proxy + thumbnails
+- Motion graphics via Hyperframes CLI — eight templates working: topic_banner, lower_third, subscribe_flash, quote_card, intro_title, punch_in, meme_pop_in, side_panel_image
+- MG transparency fix — libvpx-vp9 decoder flag applied in renderExporter.ts, confirmed working
+- MG inspector — click MG in left panel to open inspector, opacity slider, background image param, rebuild button with spinner and error state, background indicator badge in list
+- Six new Hyperframes components installed and registered in template-registry.json but NOT YET WIRED into render pipeline: caption_highlight, caption_kinetic_slam, caption_texture, grain_overlay, whip_pan, x_post
+- FFmpeg render pipeline — longform render working, proxy, thumbnails
+- Render Shorts button removed — longform render only
 - Keyboard shortcuts (Space, arrows, Delete, Ctrl+Z/Y)
-- Polish — warning badges, confidence opacity, unresolved counter
-- Whisper transcription worker (faster-whisper, CPU/int8, VAD filter, streams progress to UI)
-- IPC: settings:get/set, dialog:pickFolder/pickFile, project:openPath/readText, ingest:run + ingest:log streaming, render:longform/short/proxy/thumbnail
+- Whisper transcription worker (faster-whisper, CPU/int8, VAD filter)
+- IPC: settings:get/set, dialog:pickFolder/pickFile, project:openPath/readText, ingest:run + ingest:log streaming, render:longform/proxy/thumbnail
+- Chapter titles default to top_left position
+- Caption width enforced within portrait frame safe area
+- Player image slug uses image_subject directly (fuzzy match removed)
 - `loadProject.ts` — shared module for loading edit list into editor stores
-- `useProjectBootstrap` has been deleted — the dev seed is gone, real projects only
-- News Mode v1 (NM-1 through NM-15) — full dual-variant news pipeline, Azure TTS, beat-relative timing, variant switcher, BeatInspector, music sidechain, Ken Burns render
+- Sweet Relief test — completed successfully. Longform creator confirmed working end-to-end.
 
-### The dev seed is gone. The editor only opens after a real import or "Load sample project".
+### What does NOT exist — do not reference or assume these are built:
+- **News Mode** — not built. No BeatInspector, no Azure TTS integration, no beat-relative timing, no music sidechain, no news project type, no variant switcher. Spec documents exist in docs/ but zero implementation exists in src/.
+- **Shorts Schema v2** — not built. The current shorts implementation is a basic clip (start_time/end_time) tacked onto the longform editor. The multi-segment aggressive shorts pipeline described in docs/CADS_Shorts_Schema_v2.md does not exist yet.
+- **Getty Images API** — not built
+- **Parallax cutout render** — not built (image processing produces the cutout variant but the FFmpeg two-layer composite is not implemented)
+- **Music library** — not built
+- **Loop detection** — not built
+- **Colour grading** — not built
 
-### Still to build (out of scope for executed build order — do these only if asked):
-- Project save/reopen of an editor snapshot (mid-edit persistence)
-- Per-short approval queue UI (render:short IPC exists, but the Shorts render button only does long-form currently)
-- The config/ preset files
-- Full render pipeline wiring for the six newly installed Hyperframes components — **this is NM2-1**
-
----
-
-## FIRST REAL TEST — READY TO RUN NOW
-
-The app is ready for its first real run:
-
-1. `pnpm dev` in `C:\Users\statt\cads`
-2. Pick Projects folder and Asset Library folder on Setup screen
-3. New Project — drag in "Sweet Relief" Zoom MP4 + VTT
-4. Hit Go — Whisper runs (base model recommended, tiny for testing only)
-5. Open Submission Folder — hand transcript + audio to the CADS customGPT on ChatGPT
-6. Import the JSON the customGPT returns
-7. Review the timeline, approve, render
-
-"Sweet Relief" is the most recent CADS (Come And Discuss Spurs) episode. Stuart has already edited it manually, so the CADS output can be directly compared against the manual edit. Evaluation criteria: time saved, caption accuracy, image placement, cut naturalness, shorts quality.
-
-**Do not begin News Mode v2 work until this test is complete and any issues are fixed.**
+### Installed Hyperframes components — registered but not wired:
+The following are in compositions/ and template-registry.json but produce no output in renders yet:
+- caption_highlight, caption_kinetic_slam, caption_texture (in compositions/components/)
+- grain_overlay (in compositions/components/)
+- whip_pan, x_post (in compositions/ root)
 
 ---
 
-## WHAT TO BUILD NEXT — NEWS MODE v2
+## WHAT TO BUILD NEXT
 
-News Mode v2 generalises the existing News Mode pipeline for any news subject, adds Getty Images as a licensed image source, introduces the parallax cutout visual treatment, wires the six new Hyperframes components into the render pipeline, and adds a YouTube Shorts export variant with cover frame selector.
-
-**News Mode v2 is additive only. No existing v1 file is modified unless explicitly stated below.**
-
-### Build order — follow exactly, each phase depends on the previous:
+The codebase has three planned additions in priority order. Build them in sequence — do not start the next until the previous is complete and tested.
 
 ---
 
-### NM2-1: Wire six Hyperframes components into render pipeline (2 days)
+### PHASE 1 — SHORTS SCHEMA V2
 
-**Goal:** The six components installed in `compositions/components/` and `compositions/` must render correctly in the FFmpeg pipeline.
+**Spec document:** `docs/CADS_Shorts_Schema_v2.md` — read this before starting.
 
-**Files:**
-- `compositions/components/caption-highlight.html`
-- `compositions/components/caption-kinetic-slam.html`
-- `compositions/components/caption-texture.html`
-- `compositions/components/grain-overlay.html`
-- `compositions/whip-pan.html`
-- `compositions/x-post.html`
+The current shorts implementation is a single clip with overlays. It needs to become a multi-segment assembly pipeline for aggressive portrait short-form video.
 
-**Tasks:**
-- Read each file and confirm the param binding mechanism (data-composition-variables or hardcoded replaceable values)
-- Add each component to the Hyperframes CLI invocation path in the render pipeline
-- Verify `whip_pan` and `x_post` at 1920x1080 — if not natively vertical, apply a rotation/reframe transform at render time for 9:16 output
-- Add `grain_overlay` as a project-level persistent layer (not per-beat) in the FFmpeg filter_complex
-- Add `caption_highlight` and `caption_kinetic_slam` as selectable caption styles in BeatInspector
-- Add `caption_texture` with texture enum selector (lava, marble, metal, wood, concrete, rock)
-- Add `whip_pan` as a selectable transition in BeatInspector
-- Add `x_post` as a selectable overlay in BeatInspector with fields: display_name, handle, tweet_text, likes, retweets
-- Write tests for each component's render argument builder
+This is a self-contained addition to the existing longform pipeline. It does not require News Mode, Azure TTS, or any audio generation. It draws from the same source recording as longform.
 
-**Success criteria:** End-to-end render with each component active produces a valid MP4 with no black frames or render errors.
+**Build order (read the spec for full detail):**
 
----
+**SS-1: Zod schema extension (1 day)**
+- Add ShortSegment, ShortHook, ShortCTA, ShortOverlay, ShortCaptionStyle interfaces
+- Extend shorts array schema in editListParser.ts to accept segments[] structure
+- Backward compatibility: old start_time/end_time schema accepted with deprecation warning
+- Validation: reject shorts over 45 seconds, warn on fewer than 4 segments, reject overlay timing violations
+- Tests: valid new schema parses, deprecated schema warns, over-45s rejects
 
-### NM2-2: Getty Images API integration (3 days)
+**SS-2: FFmpeg segment assembly (3 days — highest risk)**
+- New function: buildShortsSegmentArgs() — takes segments[], returns concat filter_complex
+- Per-segment: trim, scale to 1080x1920, apply transition effect
+- Concat with transitions between segments
+- Overlay motion graphics per segment (timed relative to segment start)
+- Write pure unit tests for argument builders BEFORE any end-to-end render
+- Smoke check: render a 4-segment test short headlessly
 
-**Goal:** Users can search and download licensed Getty images directly into project image slots.
+**SS-3: Portrait-safe caption system (2 days)**
+- New function: buildShortsCaptions() — takes segments[], VTT word timings, caption_style
+- Extract word-level timings from VTT for each segment's time range
+- Re-offset to assembled timeline position
+- Generate ASS with shorts_bold style: 920px max width, 64px, centred, word-by-word
+- Apply caption_emphasis highlights
+- Tests: wrap width never exceeds 920px, emphasis words get colour tag, timing offsets correct
 
-**Tasks:**
-- Add Getty API key field to Settings screen, stored in `userData/cads-settings.json` alongside Azure credentials — never in project files
-- Extend IPC handlers with `getty:search({ query, per_page })` and `getty:download({ asset_id, slot_path })`
-- Add "Search Getty" button to each slot row in the Image Collection Screen
-- Inline search panel: keyword input (pre-populated from director's slot description), results grid (thumbnail, licence type, photographer credit)
-- On selection: download asset to slot path, set `rights_status` to `"getty_licensed"`, trigger existing image processing pipeline (original → blur → cutout variants)
-- Getty-licensed slots show no rights warning anywhere in the UI or export flow
-- Graceful fallback: if Getty API call fails (key missing, network error, rate limit), show plain-English error and allow manual upload instead — never block the workflow
-- Add `"getty_licensed"` to the `rights_status` enum in the Zod schema
-- Write tests for IPC handlers with mocked Getty responses
+**SS-4: Two-pass short form workflow (2 days)**
+- Theme selection screen between transcript upload and short import
+- Pass 1: import theme proposals list (no JSON yet), user selects theme
+- Pass 2: import full short JSON for selected theme
+- Repeat for each theme
+- This is a UI addition — does not change the render pipeline
 
-**Success criteria:** A Getty image can be searched, selected, downloaded, processed into three variants, and used in a render without triggering any rights warning.
+**SS-5: UI updates (1 day)**
+- Shorts inspector: show segment list instead of start/end time fields
+- Each segment row: source timecode range, duration, energy badge, transition label
+- Segment overlays: expandable list per segment
 
----
-
-### NM2-3: Parallax cutout treatment (2 days)
-
-**Goal:** A new image treatment that layers blur background and cutout foreground with differential Ken Burns motion, creating a depth parallax effect.
-
-**Tasks:**
-- Add `"parallax_cutout"` to the `image_treatment` enum on beat events
-- FFmpeg filter_complex: two zoompan inputs — blur layer at specified intensity, cutout layer at intensity stepped up one level (subtle→medium, medium→strong, strong→strong)
-- Cutout layer centred and slightly scaled up (1.05x) relative to blur layer
-- BeatInspector: add "Parallax Cutout" to treatment selector, shown only when cutout variant exists for the slot
-- Validation: reject `parallax_cutout` if cutout variant is missing for the slot — plain-English error: "Parallax cutout requires a background-removed image. The background removal for this slot failed or has not been run. Select a different treatment or re-process the image."
-- Write tests for the render argument builder for parallax_cutout
-- Write tests for the validation rejection case
-
-**Success criteria:** A beat with `parallax_cutout` renders with visible depth separation between background and foreground layers.
+**SS-6: End-to-end test (1 day)**
+- Re-run Sweet Relief with new schema from Agent 3 Short Form Director
+- Verify: 4+ segments, total under 45s, transitions visible, captions in frame
+- All 430+ tests passing
 
 ---
 
-### NM2-4: Dual-variant schema and export rename (2 days)
+### PHASE 2 — NEWS MODE
 
-**Goal:** Formalise the two variants as `tiktok` and `shorts` with appropriate pacing and export targets.
+**Spec documents:** `docs/NewsMode_v2_SDP.docx` and `docs/CADS_Asset_Onboarding_Spec_v2_2.md` — read both before starting.
 
-**Tasks:**
-- Rename internal variant keys from `calm`/`hectic` to `shorts`/`tiktok` — update all references in the codebase
-- Update variant switcher UI labels: "TikTok | Shorts"
-- Update toolbar title: "Episode Title · TikTok" / "· Shorts"
-- Update approval buttons: "Approve TikTok" / "Approve Shorts"
-- Update status indicator: "TikTok: approved | Shorts: 3 issues remaining"
-- Extend `video_project.json` Zod schema: `variants.tiktok` and `variants.shorts` each contain `script`, `timeline`, `captions`, `callouts`, `audio`, `publish`
-- Shared at project root: `source`, `assets`, `missing_assets`, `warnings`
-- Update editListParser.ts to accept the new variant key names
-- Update all tests that reference calm/hectic variant keys
+News Mode is a completely separate pipeline from recording mode. It has no source recording. An article comes in, a script is generated by the News Director customGPT, Azure TTS voices it, images are sourced, and FFmpeg renders two portrait videos (TikTok and Shorts variants).
 
-**Success criteria:** All existing tests pass with renamed variants. Variant switcher shows correct labels.
+**News Mode does not share screens or pipeline code with the longform editor.** It is a new project type with its own ingest, its own timeline model (beats not cuts), its own inspector (BeatInspector not InspectorPanel), and its own render pipeline.
 
----
+Do not begin News Mode until Shorts Schema v2 is complete and passing all tests.
 
-### NM2-5: Generalise News Director prompt (3 days)
+**High-level build order (read the SDP for full detail):**
 
-**Goal:** The News Director customGPT works for any news subject, not just Spurs.
-
-**Tasks:**
-- Remove all Spurs-specific instructions and references from the News Director system prompt
-- Replace with subject-agnostic framing: "You are a News Director. Your subject is [SUBJECT]. Write as if your audience follows [SUBJECT] closely."
-- Add TikTok variant brief: 30-45 seconds, scroll-stopping opening hook, single-word Kinetic Slam on first beat, aggressive pacing, Whip Pan transitions, Highlight captions
-- Add Shorts variant brief: 55-60 seconds, contextual opening (who/what/where/when in first beat), measured pacing, standard captions, source attribution prominent in final beat
-- Enforce: two genuinely different scripts — not paraphrases. Same facts, different opening strategy, different sentence rhythm, different beat count.
-- Add parallax_cutout to permitted image_treatment values with explicit prohibition: "Never use parallax_cutout for crowd shots, wide shots, or any image where a single clear subject cannot be isolated."
-- Add the six new Hyperframes components to the director's component catalogue with usage rules
-- Test against 3 non-Spurs articles (suggested: Premier League match report, technology story, human interest story)
-- Document the final prompt in: `prompts/news-director-v2.md`
-
-**Success criteria:** Three test articles produce usable dual-variant JSON with no schema validation errors and no Spurs-specific language in the output.
+1. Data model — project_type: "news", beat and music TimelineEventKind, ImageSlot, VariantState
+2. Zod schema for news edit list — beat schema, TTS character rules, validation
+3. Azure TTS integration — IPC handler, SSML input, WAV output, content hash cache
+4. Image Collection Screen — slot-based upload, Getty search, rembg processing
+5. BeatInspector UI — beat editor with TTS text, audio player, image treatment selector
+6. Ken Burns image motion — kburns param on beat events, FFmpeg zoompan
+7. Parallax cutout render — two-layer FFmpeg composite (blur + cutout)
+8. Music track — MusicInspector, sidechain ducking
+9. Beat-relative motion graphic timing
+10. Variant switcher — TikTok | Shorts toggle
+11. News render pipeline — segment assembly, TTS concat, music mix, encode
+12. Six Hyperframes components wired — caption_highlight, caption_kinetic_slam, caption_texture, grain_overlay, whip_pan, x_post
+13. Export presets — tiktok and shorts named presets, cover frame selector for Shorts
 
 ---
 
-### NM2-6: Cover frame selector for Shorts export (1 day)
+### PHASE 3 — AUDIO AND VISUAL POLISH
 
-**Goal:** Users can pick a cover frame before the Shorts MP4 is finalised.
+Do not begin until News Mode is complete.
 
-**Tasks:**
-- After Shorts render completes, show a frame scrubber modal before writing the final file
-- Scrubber shows the rendered video, user can scrub to any frame
-- "Use this frame" button exports the selected frame as `<project_slug>_shorts_cover.jpg` in the renders folder
-- "Skip" option exports the MP4 without a cover frame JPEG
-- Cover frame modal only appears for the Shorts variant — TikTok export is direct
-
-**Success criteria:** Shorts export produces both an MP4 and a correctly-named cover frame JPEG.
-
----
-
-### NM2-7: Export presets (1 day)
-
-**Goal:** Two named export presets produce correctly-spec'd output for each platform.
-
-**Tasks:**
-- Define two export presets in `config/export-presets.json`:
-  - `tiktok`: 1080x1920, 30fps, H.264, AAC, no cover frame
-  - `shorts`: 1080x1920, 30fps, H.264, AAC, cover frame selector
-- "Render Both" applies the correct preset to each variant and runs sequentially
-- Output filenames: `<project_slug>_tiktok.mp4` and `<project_slug>_shorts.mp4`
-- Write tests for preset application in the render argument builder
-
-**Success criteria:** "Render Both" produces two correctly-named, correctly-spec'd MP4 files.
-
----
-
-### NM2-8: Polish and end-to-end test (3 days)
-
-**Goal:** The complete pipeline works cleanly on real articles across different subjects.
-
-**Tasks:**
-- Grain overlay: confirm it persists correctly across all beats in both variants at opacity 0.15
-- Caption style defaults: both variants default to caption_highlight (user can override per beat)
-- Attribution lower-third: "Based on reporting from [source]" — automatic on final beat, overridable per project, default ON for both variants
-- Rights check at export: if any image slot has rights_status of "unknown" at render time, show warning modal listing affected slots — user can proceed or cancel
-- Error states: Getty API failure, rembg failure on parallax_cutout slot, Hyperframes component render failure — all produce plain-English errors, none crash the app
-- Run end-to-end test on 3 articles from different subject areas — complete pipeline from article capture to dual MP4 export
-- All 204 original tests still passing plus new tests for every new module
-
-**Success criteria:** Three articles from different subjects complete the full pipeline without error. Both variants render correctly. All tests pass.
+- Music library — watched folder, mood catalogue, loop management
+- Loop pre-processing — pre-cut loops at target lengths (4s, 8s, 12s, 16s, 30s, 60s)
+- Colour grading — normalisation pass across image pool, project-level grade presets
+- WhisperX upgrade — faster transcription with better word-level alignment
 
 ---
 
 ## ARCHITECTURAL RULES — NEVER VIOLATE
 
-1. **News Mode v2 is additive only.** Never modify existing recording-mode code paths. Never modify News Mode v1 files unless explicitly listed in a phase above.
-2. **Error messages are for Stuart, not developers.** Plain English, actionable. No stack traces in the UI.
-3. **TTS cache is sacred.** Check hash before every Azure call. Never re-bill for unchanged text.
-4. **Beat-relative timing for news projects.** CADS computes absolute timecodes. The customGPT never does cumulative arithmetic.
+1. **Error messages are for Stuart, not developers.** Plain English, actionable. No stack traces in the UI.
+2. **Recording mode is untouchable.** Never modify existing longform pipeline code unless a bug is being fixed.
+3. **Shorts Schema v2 is additive.** New schema, new render functions, new UI. Do not modify existing clip-based shorts code — deprecate it.
+4. **News Mode is a separate project type.** It does not share screens with the longform editor. Adding news mode code must never touch recording-mode code paths.
 5. **Image processing is non-destructive.** The original upload is never deleted or overwritten.
-6. **Getty API key never enters a project file.** Stored in userData only.
-7. **Parallax cutout requires a valid cutout variant.** Never attempt the FFmpeg composite if the cutout variant is missing — validate first, fail with a plain-English error.
-8. **Run `pnpm test` after every phase.** 204 original tests must continue to pass. Every new phase adds its own tests.
+6. **TTS cache is sacred (when built).** Check content hash before every Azure call. Never re-bill for unchanged text.
+7. **Beat-relative timing for news projects (when built).** CADS computes absolute timecodes. The customGPT never does cumulative arithmetic.
+8. **Run `pnpm test` after every step.** 430 tests must continue to pass. Every new step adds its own tests.
 9. **Follow existing test conventions.** Vitest, mocked IPC, deterministic fixtures.
 10. **Don't ask Stuart about technical decisions.** He is not a developer. Make the correct choice, document it in a comment, move on. Only surface genuine product/UX decisions.
-11. **The music sidechain needs real listening.** Do not change sidechain parameters without asking Stuart to listen first.
-12. **Whip Pan and X Post vertical compatibility must be confirmed in NM2-1 before any other phase uses them.**
+11. **The music sidechain needs real listening (when built).** Do not finalise sidechain parameters without Stuart listening to a test mix.
+12. **Whip Pan and X Post vertical compatibility must be confirmed before use in any render.**
 
 ---
 
 ## FOOTBALL TERMINOLOGY — KNOWN ZOOM TRANSCRIPTION ERRORS
 
-The podcasts are about Tottenham Hotspur (Spurs). Zoom regularly mangles:
+The podcasts are about Tottenham Hotspur (Spurs). Zoom and Whisper regularly mangle:
 - Kulusevski → "Kool oh sev-ski" or similar
+- Kinsky → "Kinski", "Kinske"
 - Son Heung-min → various
 - Postecoglou → various
+- Palhinha → "Paulinha", "Polinho"
+- Maddison → "James Madison"
+- De Zerbi → "De Zaube", "Dazelle"
+- Arnesen → "Arneson"
 
-A Spurs-specific find-and-replace dictionary is a future enhancement. Do not build it now.
+A Spurs-specific find-and-replace dictionary is a future enhancement to the ingest pipeline. Do not build it now — it is handled by the Agent 1 Transcript Cleaner customGPT.
 
 ---
 
 ## WHAT NOT TO BUILD YET
 
 - Multi-language TTS
-- Library catalogue auto-refresh (user-triggered only)
-- Application-wide TTS cache (per-project only)
+- Application-wide TTS cache (per-project only when TTS is built)
 - Bokeh depth-aware blur (Gaussian only)
-- Music library curation screen
 - AI-generated backdrops for cutout images (solid colour only)
 - AI-generated images for missing slots
-- Site-specific Chrome extension HTML overrides (Readability only)
-- Library management / news_inbox promotion UI (manual only)
 - Direct TikTok or YouTube upload API
 - Reddit Post Card component wiring (deferred)
 - Automatic thumbnail generation for YouTube long-form
 - Project save/reopen of mid-edit snapshots
-- Per-short approval queue UI
 - Multi-user access or creator marketplace
+- Getty Images API (deferred — free image sources first: Unsplash, Pexels, Wikimedia)
+- Remotion integration (deferred to Phase 3+)
 
 ---
 
@@ -331,3 +265,4 @@ A Spurs-specific find-and-replace dictionary is a future enhancement. Do not bui
 ---
 
 *End of briefing. This file lives at `C:\Users\statt\cads\CLAUDE.md` and is read automatically by Claude Code at the start of every session.*
+*Last updated: 07 June 2026 — corrected to reflect true codebase state after Sweet Relief test.*

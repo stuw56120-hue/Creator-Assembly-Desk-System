@@ -129,16 +129,85 @@ const FramingSchema = z
   })
   .passthrough();
 
+/* ── Shorts Schema v2 (multi-segment) ──────────────────────────────────────
+ * A short is now a directed SEQUENCE of independently-timed segments pulled from
+ * different points in the source, with a hook, per-segment overlays/transitions,
+ * and a closing CTA. The legacy v1 clip shape (start_time/end_time + string
+ * hook) is still accepted for backward compatibility but flagged as deprecated
+ * by the parser (see validateShort). Spec: docs/CADS_Shorts_Schema_v2.md.
+ */
+
+/** v2 caption styles — drives the inspector's option list (SS-5). The schema
+ *  accepts any string so legacy v1 styles (e.g. "bold_social") still parse. */
+export const SHORT_CAPTION_STYLES_V2 = ["shorts_bold", "shorts_minimal", "shorts_kinetic"] as const;
+
+/** Permitted per-segment transitions. Kept as free strings in the schema (like
+ *  longform transitions); the SS-2 renderer maps/handles them. */
+export const SHORT_SEGMENT_TRANSITIONS = [
+  "cut",
+  "smash_cut",
+  "punch_zoom",
+  "whip_pan",
+  "flash_white",
+  "none",
+] as const;
+
+// One motion-graphic overlay inside a segment / hook / cta. The motion_graphic_id
+// is validated against the template registry by parseEditList (like longform).
+export const ShortOverlaySchema = z
+  .object({
+    motion_graphic_id: z.string(),
+    params: z.record(z.unknown()).default({}),
+    appear_at_seconds: z.number().nonnegative().default(0),
+    duration_seconds: z.number().positive(),
+  })
+  .passthrough();
+
+export const ShortHookSchema = z
+  .object({
+    text: z.string().default(""),
+    overlay: ShortOverlaySchema.optional(),
+  })
+  .passthrough();
+
+export const ShortCTASchema = z
+  .object({
+    text: z.string().default(""),
+    motion_graphic_id: z.string(),
+    params: z.record(z.unknown()).default({}),
+  })
+  .passthrough();
+
+export const ShortSegmentSchema = z
+  .object({
+    segment_id: z.string(),
+    start_time: timecode,
+    end_time: timecode,
+    speaker_focus: z.string().optional(),
+    energy: z.enum(["low", "medium", "high", "peak"]).default("medium"),
+    transition_in: z.string().default("cut"),
+    transition_out: z.string().default("cut"),
+    overlays: z.array(ShortOverlaySchema).default([]),
+    caption_emphasis: z.array(z.string()).default([]),
+  })
+  .passthrough();
+
 export const ShortSchema = z
   .object({
     short_id: z.string(),
     title: z.string().optional(),
-    hook: z.string().default(""),
-    start_time: timecode,
-    end_time: timecode,
+    target_duration_seconds: z.number().positive().optional(),
+    caption_style: z.string().default("bold_social"),
+    // v2 hook is an object { text, overlay }; v1 hook is a plain string. Accept
+    // both — the parser and timeline builder read whichever shape is present.
+    hook: z.union([z.string(), ShortHookSchema]).default(""),
+    segments: z.array(ShortSegmentSchema).optional(),
+    cta: ShortCTASchema.optional(),
+    // v1 (deprecated) clip fields — optional so v2 shorts (which omit them) parse.
+    start_time: timecode.optional(),
+    end_time: timecode.optional(),
     selection_basis: z.string().optional(),
     confidence,
-    caption_style: z.string().default("bold_social"),
     framing: FramingSchema.optional(),
     transitions: z.array(NestedTransitionSchema).default([]),
     motion_overlays: z.array(NestedMotionOverlaySchema).default([]),
@@ -235,6 +304,10 @@ export type PlayerImageOverlay = z.infer<typeof PlayerImageOverlaySchema>;
 export type CutInstruction = z.infer<typeof CutSchema>;
 export type ChapterInstruction = z.infer<typeof ChapterSchema>;
 export type ShortInstruction = z.infer<typeof ShortSchema>;
+export type ShortSegment = z.infer<typeof ShortSegmentSchema>;
+export type ShortHook = z.infer<typeof ShortHookSchema>;
+export type ShortOverlay = z.infer<typeof ShortOverlaySchema>;
+export type ShortCTA = z.infer<typeof ShortCTASchema>;
 export type MotionOverlayInstruction = z.infer<typeof MotionOverlaySchema>;
 export type TransitionInstruction = z.infer<typeof TransitionSchema>;
 
@@ -432,6 +505,96 @@ export function normalizeEditList(input: unknown): unknown {
   return root;
 }
 
+/* ── Shorts Schema v2 validation ──────────────────────────────────────────── */
+/** Maximum assembled short duration (seconds). Over this is a hard rejection. */
+export const MAX_SHORT_SECONDS = 45;
+/** Below this segment count the parser warns (but accepts) — a clip, not a short. */
+export const MIN_SHORT_SEGMENTS = 4;
+
+/** Seconds the hook contributes to a short's assembled length (its overlay's
+ *  duration when present; 0 if the short has no hook overlay). */
+function shortHookDuration(short: ShortInstruction): number {
+  const hook = short.hook;
+  if (hook && typeof hook === "object" && hook.overlay && typeof hook.overlay.duration_seconds === "number") {
+    return hook.overlay.duration_seconds;
+  }
+  return 0;
+}
+
+/**
+ * Business validation for one short (Shorts Schema v2). Errors are hard
+ * rejections (fail the import); warnings are advisory (import proceeds):
+ *  - v1 clip shape (start_time/end_time, no segments) → WARNING (deprecated)
+ *  - neither segments nor a clip range → ERROR
+ *  - assembled duration (Σ segment durations + hook) over 45s → ERROR
+ *  - fewer than 4 segments → WARNING
+ *  - an overlay whose appear_at + duration exceeds its segment → ERROR
+ *  - any overlay / hook / cta motion_graphic_id not in the registry → ERROR
+ */
+export function validateShort(
+  short: ShortInstruction,
+  registry: TemplateRegistry,
+): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const id = short.short_id;
+  const segments = Array.isArray(short.segments) ? short.segments : [];
+  const hasSegments = segments.length > 0;
+  const hasClip = typeof short.start_time === "string" && typeof short.end_time === "string";
+
+  if (!hasSegments) {
+    if (hasClip) {
+      warnings.push(
+        `${id}: uses the deprecated v1 clip schema (start_time/end_time). Re-generate with Edit Director v2 to use segments[].`,
+      );
+    } else {
+      errors.push(`${id}: a short must define segments[] (Shorts Schema v2).`);
+    }
+    return { errors, warnings };
+  }
+
+  if (segments.length < MIN_SHORT_SEGMENTS) {
+    warnings.push(
+      `${id}: only ${segments.length} segment${segments.length === 1 ? "" : "s"} — minimum ${MIN_SHORT_SEGMENTS} recommended for short-form pacing.`,
+    );
+  }
+
+  let total = shortHookDuration(short);
+  for (const seg of segments) {
+    const segDur = Math.max(0, parseTimecode(seg.end_time) - parseTimecode(seg.start_time));
+    total += segDur;
+    for (const ov of seg.overlays ?? []) {
+      const end = (ov.appear_at_seconds ?? 0) + ov.duration_seconds;
+      if (end > segDur + 1e-6) {
+        errors.push(
+          `${id} / ${seg.segment_id}: overlay "${ov.motion_graphic_id}" ends at ${end.toFixed(1)}s but the segment is only ${segDur.toFixed(1)}s long.`,
+        );
+      }
+      if (!registry[ov.motion_graphic_id]) {
+        errors.push(
+          `${id} / ${seg.segment_id}: unknown motion graphic "${ov.motion_graphic_id}" — not in template-registry.json.`,
+        );
+      }
+    }
+  }
+
+  if (total > MAX_SHORT_SECONDS + 1e-6) {
+    errors.push(
+      `${id}: assembled duration ${total.toFixed(1)}s exceeds the ${MAX_SHORT_SECONDS}s maximum — remove the weakest segment.`,
+    );
+  }
+
+  const hook = short.hook;
+  if (hook && typeof hook === "object" && hook.overlay && !registry[hook.overlay.motion_graphic_id]) {
+    errors.push(`${id} / hook: unknown motion graphic "${hook.overlay.motion_graphic_id}".`);
+  }
+  if (short.cta && !registry[short.cta.motion_graphic_id]) {
+    errors.push(`${id} / cta: unknown motion graphic "${short.cta.motion_graphic_id}".`);
+  }
+
+  return { errors, warnings };
+}
+
 /**
  * Parse and validate a customGPT edit list. Input is first normalised
  * (see normalizeEditList) so reasonable output variations are accepted.
@@ -479,6 +642,19 @@ export function parseEditList(input: unknown, registry: TemplateRegistry): Parse
       templateId: overlay.motion_graphic_id,
       params: merged,
     });
+  }
+
+  // Shorts Schema v2 validation. v1 clip shorts are accepted with a deprecation
+  // warning; v2 violations (over 45s, overlay overruns, unknown motion graphic)
+  // are hard errors that fail the import (per docs/CADS_Shorts_Schema_v2.md).
+  const shortErrors: string[] = [];
+  for (const short of editList.shorts) {
+    const { errors: sErr, warnings: sWarn } = validateShort(short, registry);
+    shortErrors.push(...sErr);
+    warnings.push(...sWarn);
+  }
+  if (shortErrors.length > 0) {
+    return { ok: false, errors: shortErrors, warnings };
   }
 
   // Derive per-player upload slots from player_image_overlays (top-level, and

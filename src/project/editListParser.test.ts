@@ -24,7 +24,9 @@ describe("parseEditList", () => {
     expect(result.editList.longform.chapters).toHaveLength(9);
     expect(result.editList.longform.motion_overlays).toHaveLength(2);
     expect(result.editList.shorts).toHaveLength(4);
-    expect(result.warnings).toEqual([]);
+    // All 4 fixture shorts use the deprecated v1 clip schema → one warning each.
+    expect(result.warnings).toHaveLength(4);
+    expect(result.warnings.every((w) => w.includes("deprecated v1 clip schema"))).toBe(true);
   });
 
   it("queues a build job for every long-form motion graphic", () => {
@@ -209,5 +211,139 @@ describe("parseEditList", () => {
       expect(result.editList.metadata.duration_seconds).toBeCloseTo(2528.021, 3);
       expect(result.buildQueue).toHaveLength(2);
     });
+  });
+});
+
+describe("Shorts Schema v2 (SS-1)", () => {
+  function seg(
+    segment_id: string,
+    start_time: string,
+    end_time: string,
+    overlays: Record<string, unknown>[] = [],
+  ) {
+    return {
+      segment_id,
+      start_time,
+      end_time,
+      energy: "high",
+      transition_in: "cut",
+      transition_out: "cut",
+      overlays,
+      caption_emphasis: [],
+    };
+  }
+
+  function v2Short(overrides: Record<string, unknown> = {}) {
+    return {
+      short_id: "short_v2",
+      title: "V2 Short",
+      target_duration_seconds: 30,
+      caption_style: "shorts_bold",
+      hook: {
+        text: "Big hook",
+        overlay: { motion_graphic_id: "topic_banner", params: { title: "HOOK" }, duration_seconds: 3 },
+      },
+      segments: [
+        seg("seg_001", "00:00:00.000", "00:00:05.000", [
+          { motion_graphic_id: "quote_card", params: { text: "A" }, appear_at_seconds: 1, duration_seconds: 3 },
+        ]),
+        seg("seg_002", "00:00:10.000", "00:00:15.000"),
+        seg("seg_003", "00:00:20.000", "00:00:25.000"),
+        seg("seg_004", "00:00:30.000", "00:00:35.000"),
+      ],
+      cta: { text: "Follow", motion_graphic_id: "subscribe_flash", params: {} },
+      ...overrides,
+    };
+  }
+
+  /** Wrap a short in a minimal edit list (longform defaults to empty). */
+  function listWith(short: Record<string, unknown>) {
+    return { project_name: "V2", metadata: { duration_seconds: 600 }, longform: {}, shorts: [short] };
+  }
+
+  it("parses a valid v2 short (segments[]) with no errors and no warnings", () => {
+    const result = parseEditList(listWith(v2Short()), testRegistry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.warnings).toEqual([]);
+    expect(result.editList.shorts[0].segments).toHaveLength(4);
+  });
+
+  it("accepts a deprecated v1 clip short with a warning (not rejected)", () => {
+    const v1 = { short_id: "old_clip", hook: "hi", start_time: "00:00:10.000", end_time: "00:00:40.000" };
+    const result = parseEditList(listWith(v1), testRegistry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.warnings.some((w) => w.includes("deprecated v1 clip schema"))).toBe(true);
+  });
+
+  it("rejects a short whose assembled duration exceeds 45s", () => {
+    const long = v2Short({
+      segments: [
+        seg("s1", "00:00:00.000", "00:00:12.000"),
+        seg("s2", "00:00:20.000", "00:00:32.000"),
+        seg("s3", "00:00:40.000", "00:00:52.000"),
+        seg("s4", "00:01:00.000", "00:01:12.000"),
+      ],
+    });
+    const result = parseEditList(listWith(long), testRegistry);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.includes("exceeds the 45s maximum"))).toBe(true);
+  });
+
+  it("rejects an overlay that runs past its segment's duration", () => {
+    const bad = v2Short({
+      segments: [
+        seg("s1", "00:00:00.000", "00:00:05.000", [
+          { motion_graphic_id: "quote_card", params: {}, appear_at_seconds: 3, duration_seconds: 4 }, // 3+4=7 > 5
+        ]),
+        seg("s2", "00:00:10.000", "00:00:15.000"),
+        seg("s3", "00:00:20.000", "00:00:25.000"),
+        seg("s4", "00:00:30.000", "00:00:35.000"),
+      ],
+    });
+    const result = parseEditList(listWith(bad), testRegistry);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.includes("only 5.0s long"))).toBe(true);
+  });
+
+  it("warns (but accepts) a short with fewer than 4 segments", () => {
+    const short3 = v2Short({
+      segments: [
+        seg("s1", "00:00:00.000", "00:00:05.000"),
+        seg("s2", "00:00:10.000", "00:00:15.000"),
+        seg("s3", "00:00:20.000", "00:00:25.000"),
+      ],
+    });
+    const result = parseEditList(listWith(short3), testRegistry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.warnings.some((w) => w.includes("minimum 4"))).toBe(true);
+  });
+
+  it("rejects an unknown motion_graphic_id in a segment overlay", () => {
+    const bad = v2Short({
+      segments: [
+        seg("s1", "00:00:00.000", "00:00:05.000", [
+          { motion_graphic_id: "does_not_exist", params: {}, appear_at_seconds: 0, duration_seconds: 2 },
+        ]),
+        seg("s2", "00:00:10.000", "00:00:15.000"),
+        seg("s3", "00:00:20.000", "00:00:25.000"),
+        seg("s4", "00:00:30.000", "00:00:35.000"),
+      ],
+    });
+    const result = parseEditList(listWith(bad), testRegistry);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.includes('unknown motion graphic "does_not_exist"'))).toBe(true);
+  });
+
+  it("rejects an unknown motion_graphic_id in the CTA", () => {
+    const result = parseEditList(listWith(v2Short({ cta: { text: "x", motion_graphic_id: "nope", params: {} } })), testRegistry);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.includes("cta: unknown motion graphic"))).toBe(true);
   });
 });
