@@ -702,6 +702,166 @@ export function buildShortRenderArgs(plan: ShortRenderPlan): string[] {
   return args;
 }
 
+/* ── Shorts Schema v2: multi-segment assembly (SS-2) ───────────────────────
+ * A v2 short is a directed SEQUENCE of segments pulled from different points in
+ * the source, concatenated with transitions, with motion-graphic overlays timed
+ * relative to each segment's position in the ASSEMBLED timeline. Captions are a
+ * separate pass (SS-3). Spec: docs/CADS_Shorts_Schema_v2.md.
+ */
+
+/** A motion-graphic overlay inside a v2 short (hook, per-segment, or CTA). */
+export interface ShortMgOverlay {
+  inputPath: string; // WebM (alpha) or image
+  /** Segment overlays: seconds after the segment's start. Hook/CTA: after their anchor. */
+  appearAtSeconds: number;
+  durationSeconds: number;
+  /** Full-frame MG composited to cover the frame (the default for these comps). */
+  fullFrame?: boolean;
+}
+
+/** One assembled segment: a source [in,out] range with its transitions + overlays. */
+export interface ShortSegmentRenderInput {
+  inSeconds: number;
+  outSeconds: number;
+  transitionIn: string; // effect as this segment ENTERS
+  transitionOut: string; // effect as this segment LEAVES
+  overlays: ShortMgOverlay[];
+}
+
+export interface ShortsSegmentRenderPlan {
+  sourcePath: string;
+  segments: ShortSegmentRenderInput[];
+  /** Opening hook MG, composited from output t=0 (its appearAtSeconds, usually 0). */
+  hookOverlay?: ShortMgOverlay;
+  /** Closing CTA MG, composited over the tail of the final segment. */
+  ctaOverlay?: ShortMgOverlay;
+  outputPath: string;
+  ffmpegBin?: string;
+  frameWidth?: number; // default 1080
+  frameHeight?: number; // default 1920
+  preset?: RenderPreset;
+}
+
+/** A real (effect-bearing) transition? cut / none / unknown → false. */
+function isEffectTransition(t: string): boolean {
+  const n = normalizeTransitionType(t);
+  return n === "smash_cut" || n === "flash_white" || n === "punch_zoom" || n === "whip_pan";
+}
+
+/**
+ * The single effect at a boundary between two segments. Prefers the OUTGOING
+ * segment's transition_out; falls back to the INCOMING segment's transition_in;
+ * cut / none → "cut" (no effect). Exported for unit testing.
+ */
+export function boundaryEffect(transitionOut: string, transitionIn: string): string {
+  if (isEffectTransition(transitionOut)) return normalizeTransitionType(transitionOut);
+  if (isEffectTransition(transitionIn)) return normalizeTransitionType(transitionIn);
+  return "cut";
+}
+
+/**
+ * Build the FFmpeg argv to assemble a Shorts Schema v2 short: each segment is
+ * trimmed from the source, centre-cropped to 9:16 and scaled to 1080×1920; the
+ * segments are concatenated; transition effects are applied at the boundaries;
+ * and motion-graphic overlays (hook, per-segment, CTA) are composited at their
+ * assembled-timeline output times. Captions are added separately (SS-3).
+ *
+ * Transition handling (verticals verified in SS-1):
+ *  - cut / none  → plain concat boundary (no filter)
+ *  - smash_cut   → brief white flash at the boundary
+ *  - flash_white → white flash (same effect; the 1-vs-2-frame distinction is
+ *                  approximated by the shared flash window)
+ *  - punch_zoom  → quick zoom on the outgoing segment's tail
+ *  - whip_pan    → FALLS BACK TO A PLAIN CUT. The whip_pan Hyperframes block is a
+ *                  landscape demo composition (SS-1 finding), unusable at 9:16
+ *                  until re-authored; we cut cleanly rather than emit a broken
+ *                  effect. Tracked as a known limitation.
+ *
+ * Known limitation: full-frame MG overlays are 1920×1080 landscape comps scaled
+ * to the 1080×1920 frame (matching the v1 short builder), so they squash
+ * horizontally until a vertical MG treatment exists. Assembly is correct.
+ */
+export function buildShortsSegmentArgs(plan: ShortsSegmentRenderPlan): string[] {
+  const frameW = plan.frameWidth ?? 1080;
+  const frameH = plan.frameHeight ?? 1920;
+  const segs = plan.segments;
+
+  // Cumulative output offsets (assembled-timeline start of each segment).
+  const offsets: number[] = [];
+  let acc = 0;
+  for (const seg of segs) {
+    offsets.push(acc);
+    acc += Math.max(0, seg.outSeconds - seg.inSeconds);
+  }
+  const totalDuration = acc;
+
+  // Ordered overlay list — the input order MUST match buildOverlayChain's
+  // [i+1:v] indexing: hook first, then each segment's overlays, then the CTA.
+  const mapped: MappedOverlay[] = [];
+  const overlayPaths: string[] = [];
+  const pushOverlay = (ov: ShortMgOverlay, outStart: number) => {
+    overlayPaths.push(ov.inputPath);
+    mapped.push({
+      outStart: Number(Math.max(0, outStart).toFixed(3)),
+      duration: ov.durationSeconds,
+      placement: "center",
+      fullFrame: ov.fullFrame ?? true,
+    });
+  };
+  if (plan.hookOverlay) pushOverlay(plan.hookOverlay, plan.hookOverlay.appearAtSeconds ?? 0);
+  segs.forEach((seg, i) => {
+    for (const ov of seg.overlays) pushOverlay(ov, offsets[i] + (ov.appearAtSeconds ?? 0));
+  });
+  if (plan.ctaOverlay) {
+    pushOverlay(plan.ctaOverlay, totalDuration - plan.ctaOverlay.durationSeconds);
+  }
+
+  // Inputs: source first, then the overlays (alpha WebMs decoded with libvpx-vp9).
+  const args: string[] = ["-i", plan.sourcePath];
+  for (const p of overlayPaths) args.push(...overlayInputArgs(p));
+
+  // Per-segment trim → 9:16 crop → scale, then concat video+audio.
+  const parts: string[] = [];
+  segs.forEach((seg, i) => {
+    parts.push(
+      `[0:v]trim=start=${seg.inSeconds}:end=${seg.outSeconds},setpts=PTS-STARTPTS,` +
+        `crop=w=ih*9/16:h=ih,scale=${frameW}:${frameH},setsar=1[sv${i}]`,
+    );
+    parts.push(
+      `[0:a]atrim=start=${seg.inSeconds}:end=${seg.outSeconds},asetpts=PTS-STARTPTS[sa${i}]`,
+    );
+  });
+  const concatInputs = segs.map((_, i) => `[sv${i}][sa${i}]`).join("");
+  parts.push(`${concatInputs}concat=n=${segs.length}:v=1:a=1[cv][ca]`);
+
+  // One transition effect per boundary, at its assembled-timeline output time.
+  const transitions: { outStart: number; type: string }[] = [];
+  for (let i = 0; i < segs.length - 1; i++) {
+    const tb = offsets[i + 1]; // boundary = end of seg i = start of seg i+1
+    const effect = boundaryEffect(segs[i].transitionOut, segs[i + 1].transitionIn);
+    if (effect === "punch_zoom") {
+      // Zoom the OUTGOING segment's tail (the window before the cut).
+      transitions.push({
+        outStart: Number(Math.max(offsets[i], tb - PUNCH_ZOOM_SECONDS).toFixed(3)),
+        type: "punch_zoom",
+      });
+    } else if (effect === "smash_cut" || effect === "flash_white") {
+      transitions.push({ outStart: tb, type: "smash_cut" }); // both → white flash
+    }
+    // whip_pan / cut → no filter (clean cut)
+  }
+  const { parts: transParts, finalLabel: afterTransitions } = buildTransitionChain("[cv]", transitions);
+  parts.push(...transParts);
+
+  // Composite the MG overlays at their assembled output times.
+  const { parts: overlayParts, finalLabel } = buildOverlayChain(afterTransitions, mapped, frameW, frameH);
+  parts.push(...overlayParts);
+
+  args.push("-filter_complex", parts.join(";"), "-map", finalLabel, "-map", "[ca]");
+  args.push(...encodeArgs(plan.preset), "-y", plan.outputPath);
+  return args;
+}
+
 /** Proxy generation: downscale to a fast preview MP4 (preview source, never the 42-min original). */
 export function buildProxyRenderArgs(sourcePath: string, outputPath: string): string[] {
   // A lightweight review proxy — only good enough to scrub and review edits, not

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  boundaryEffect,
   buildLongformRenderArgs,
   buildShortRenderArgs,
+  buildShortsSegmentArgs,
   buildSrtContent,
   captionForceStyle,
   mapCaptionsForLongform,
@@ -10,6 +12,7 @@ import {
   pickDominantCaptionStyle,
   placementExpr,
   sourceToOutputTime,
+  type ShortsSegmentRenderPlan,
 } from "./renderExporter";
 import { EditListSchema } from "./editListParser";
 import { buildTimeline } from "./timelineBuilder";
@@ -730,5 +733,107 @@ describe("buildShortRenderArgs", () => {
     });
     const i = args.indexOf("ov.webm");
     expect(args.slice(i - 3, i + 1)).toEqual(["-c:v", "libvpx-vp9", "-i", "ov.webm"]);
+  });
+});
+
+describe("boundaryEffect (SS-2)", () => {
+  it("prefers the outgoing transition_out", () => {
+    expect(boundaryEffect("punch_zoom", "cut")).toBe("punch_zoom");
+    expect(boundaryEffect("smash_cut", "punch_zoom")).toBe("smash_cut");
+  });
+  it("falls back to the incoming transition_in when out is a plain cut/none", () => {
+    expect(boundaryEffect("cut", "smash_cut")).toBe("smash_cut");
+    expect(boundaryEffect("none", "punch_zoom")).toBe("punch_zoom");
+  });
+  it("returns 'cut' when neither side carries an effect", () => {
+    expect(boundaryEffect("cut", "none")).toBe("cut");
+    expect(boundaryEffect("", "")).toBe("cut");
+  });
+});
+
+describe("buildShortsSegmentArgs (SS-2)", () => {
+  // Four 5-second segments → offsets [0,5,10,15], total 20s.
+  function fourSegments(): ShortsSegmentRenderPlan {
+    const seg = (inS: number, tin = "cut", tout = "cut", overlays: never[] = []) => ({
+      inSeconds: inS,
+      outSeconds: inS + 5,
+      transitionIn: tin,
+      transitionOut: tout,
+      overlays,
+    });
+    return {
+      sourcePath: "src.mp4",
+      segments: [seg(0), seg(10), seg(20), seg(30)],
+      outputPath: "short_001.mp4",
+    };
+  }
+  const fc = (args: string[]) => args[args.indexOf("-filter_complex") + 1];
+
+  it("trims, 9:16-crops, scales each segment and concats N=4", () => {
+    const args = buildShortsSegmentArgs(fourSegments());
+    expect(args.slice(0, 2)).toEqual(["-i", "src.mp4"]);
+    const f = fc(args);
+    // one trim + one atrim per segment
+    expect((f.match(/\[0:v\]trim=start=/g) || []).length).toBe(4);
+    expect((f.match(/\[0:a\]atrim=start=/g) || []).length).toBe(4);
+    expect(f).toContain("crop=w=ih*9/16:h=ih,scale=1080:1920,setsar=1[sv0]");
+    expect(f).toContain("[sv0][sa0][sv1][sa1][sv2][sa2][sv3][sa3]concat=n=4:v=1:a=1[cv][ca]");
+    // With no overlays/transitions, video maps the concat label; audio maps [ca].
+    const mapIdxs = args.map((a, k) => (a === "-map" ? k : -1)).filter((k) => k >= 0);
+    expect(args[mapIdxs[0] + 1]).toBe("[cv]");
+    expect(args[mapIdxs[1] + 1]).toBe("[ca]");
+  });
+
+  it("applies no transition filters when every boundary is a plain cut", () => {
+    const f = fc(buildShortsSegmentArgs(fourSegments()));
+    expect(f).not.toContain("drawbox");
+    expect(f).not.toContain("split=2");
+  });
+
+  it("emits a white flash for smash_cut and a zoom for punch_zoom at the right output times", () => {
+    const plan = fourSegments();
+    plan.segments[0].transitionOut = "punch_zoom"; // boundary 0→1 at t=5 (zoom on outgoing tail)
+    plan.segments[2].transitionIn = "smash_cut"; // boundary 1→2 at t=10 (flash as seg2 enters)
+    const f = fc(buildShortsSegmentArgs(plan));
+    // smash_cut flash starts at the boundary (offset of seg2 = 10), lasts 0.15s
+    expect(f).toContain("drawbox");
+    expect(f).toContain("between(t,10,10.15)");
+    // punch_zoom zooms the outgoing tail: window [5-0.35, 5] = [4.65, 5]
+    expect(f).toContain("split=2");
+    expect(f).toContain("between(t,4.65,5)");
+  });
+
+  it("falls back to a plain cut for whip_pan (no transition filter emitted)", () => {
+    const plan = fourSegments();
+    plan.segments[1].transitionOut = "whip_pan";
+    const f = fc(buildShortsSegmentArgs(plan));
+    expect(f).not.toContain("drawbox");
+    expect(f).not.toContain("split=2");
+  });
+
+  it("times a per-segment overlay relative to its segment's assembled position", () => {
+    const plan = fourSegments();
+    // overlay on segment index 2 (offset 10), appears 1s in, lasts 3s → [11,14]
+    plan.segments[2].overlays = [
+      { inputPath: "mg.webm", appearAtSeconds: 1, durationSeconds: 3 } as never,
+    ];
+    const args = buildShortsSegmentArgs(plan);
+    const f = fc(args);
+    expect(f).toContain("enable='between(t,11,14)'");
+    // the webm overlay input is decoded with libvpx-vp9
+    const i = args.indexOf("mg.webm");
+    expect(args.slice(i - 3, i + 1)).toEqual(["-c:v", "libvpx-vp9", "-i", "mg.webm"]);
+  });
+
+  it("composites the hook at t=0 and the CTA over the final segment's tail", () => {
+    const plan = fourSegments();
+    plan.hookOverlay = { inputPath: "hook.webm", appearAtSeconds: 0, durationSeconds: 3 };
+    plan.ctaOverlay = { inputPath: "cta.webm", appearAtSeconds: 0, durationSeconds: 2 };
+    const args = buildShortsSegmentArgs(plan);
+    const f = fc(args);
+    expect(f).toContain("enable='between(t,0,3)'"); // hook at output 0
+    expect(f).toContain("enable='between(t,18,20)'"); // cta over tail: total 20 - 2 = 18
+    // input order: source, hook, cta → both decoded with libvpx-vp9
+    expect(args.indexOf("hook.webm")).toBeLessThan(args.indexOf("cta.webm"));
   });
 });
