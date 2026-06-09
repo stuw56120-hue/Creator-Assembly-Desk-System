@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { NumberField, ReadOnly, SelectField, TextField } from "./fields";
 import { useProjectStore } from "../project/projectStore";
+import { useShortsQueueStore } from "../toolbar/shortsQueueStore";
 import type { ShortSegmentSummary, TimelineEvent } from "../project/types";
 
 const ENERGY_OPTIONS = [
@@ -132,6 +133,17 @@ export function ShortInspector({ event }: { event: TimelineEvent }) {
             onRemove={() => removeSegment(i)}
           />
         ))
+      )}
+
+      {segments.length > 0 && (
+        <button
+          type="button"
+          onClick={() => useShortsQueueStore.getState().openQueue(event.id, true)}
+          style={renderPreviewBtn}
+          title="Render a 720p preview, then approve for full quality"
+        >
+          ▶ Render Preview
+        </button>
       )}
 
       {short.notes.length > 0 && (
@@ -279,6 +291,18 @@ function SegmentRow({
   );
 }
 
+const renderPreviewBtn: React.CSSProperties = {
+  marginTop: "var(--space-sm)",
+  width: "100%",
+  fontSize: 13,
+  fontWeight: 600,
+  padding: "0.5rem 1rem",
+  borderRadius: "var(--radius-md)",
+  border: "none",
+  background: "var(--accent-green, #34d399)",
+  color: "#0a0a0a",
+  cursor: "pointer",
+};
 const addBtn: React.CSSProperties = {
   fontSize: 11,
   padding: "3px 8px",

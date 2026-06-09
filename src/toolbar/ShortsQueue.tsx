@@ -11,7 +11,7 @@
  * per-segment contact sheet, both openable when done. Skip moves on.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProjectStore } from "../project/projectStore";
 import { captionsWithinSpan, listShorts, overlaysWithinSpan, shortV2RenderPlan } from "../project/shortsQueue";
 import { assetUrl } from "../library/MotionGraphicPreview";
@@ -19,14 +19,29 @@ import { formatTime } from "../player/time";
 
 type V2Phase = "idle" | "rendering-proxy" | "blocked" | "proxy" | "rendering-full" | "full-done";
 
-export function ShortsQueue({ onClose }: { onClose: () => void }) {
+export function ShortsQueue({
+  onClose,
+  initialShortId,
+  autoPreview = false,
+}: {
+  onClose: () => void;
+  /** Open the queue on this short_in event (e.g. from the inspector). */
+  initialShortId?: string;
+  /** Auto-start the proxy preview render for the initial short on open. */
+  autoPreview?: boolean;
+}) {
   const events = useProjectStore((s) => s.events);
   const projectName = useProjectStore((s) => s.projectName);
   const sourceVideoPath = useProjectStore((s) => s.sourceVideoPath);
   const captionStyle = useProjectStore((s) => s.captionStyle);
 
   const shorts = listShorts(events);
-  const [index, setIndex] = useState(0);
+  // Start on the requested short when opened from the inspector.
+  const [index, setIndex] = useState(() => {
+    if (!initialShortId) return 0;
+    const i = shorts.findIndex((s) => s.id === initialShortId);
+    return i >= 0 ? i : 0;
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [approvedCount, setApprovedCount] = useState(0);
@@ -52,6 +67,19 @@ export function ShortsQueue({ onClose }: { onClose: () => void }) {
       if (d.phase === "short") setPercent(d.percent);
     });
     return unsub;
+  }, []);
+
+  // Opened from the inspector's "Render Preview" → kick off the proxy render for
+  // the initial (v2) short once, on mount.
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (autoFired.current || !autoPreview) return;
+    const first = shorts[index];
+    if ((first?.shortData?.segments?.length ?? 0) > 0) {
+      autoFired.current = true;
+      void renderV2("proxy");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function next() {

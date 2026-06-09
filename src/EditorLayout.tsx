@@ -12,6 +12,8 @@ import { MotionGraphicsStudio } from "./library/MotionGraphicsStudio";
 import { VideoPlayer } from "./player/VideoPlayer";
 import { InspectorPanel } from "./inspector/InspectorPanel";
 import { TimelineCanvas } from "./timeline/TimelineCanvas";
+import { ShortsQueue } from "./toolbar/ShortsQueue";
+import { useShortsQueueStore } from "./toolbar/shortsQueueStore";
 import { useAppStore } from "./app/appStore";
 import { useBuildAlertStore } from "./motionGraphics/buildAlertStore";
 import { useKeyboard } from "./hooks/useKeyboard";
@@ -25,6 +27,10 @@ export function EditorLayout() {
   // so the editor no longer gates internally.
   const proxyPath = useAppStore((s) => s.proxyPath);
   const buildAlert = useBuildAlertStore((s) => s.message);
+  const shortsQueueOpen = useShortsQueueStore((s) => s.open);
+  const shortsQueueInitialId = useShortsQueueStore((s) => s.initialShortId);
+  const shortsQueueAutoPreview = useShortsQueueStore((s) => s.autoPreview);
+  const closeShortsQueue = useShortsQueueStore((s) => s.closeQueue);
 
   return (
     // overflow:hidden clamps the column to the viewport so the bottom timeline
@@ -80,6 +86,14 @@ export function EditorLayout() {
       <div style={{ height: 320, flexShrink: 0, borderTop: "1px solid var(--border)" }}>
         <TimelineCanvas />
       </div>
+
+      {shortsQueueOpen && (
+        <ShortsQueue
+          initialShortId={shortsQueueInitialId ?? undefined}
+          autoPreview={shortsQueueAutoPreview}
+          onClose={closeShortsQueue}
+        />
+      )}
 
       {studioOpen && (
         <div
