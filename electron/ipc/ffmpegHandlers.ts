@@ -519,7 +519,10 @@ export function registerFfmpegHandlers(): void {
         sourcePath: plan.sourcePath,
         inSeconds: plan.inSeconds,
         outSeconds: plan.outSeconds,
-        overlays: plan.overlays,
+        // Defensive: a v2 plan (segments[], no top-level overlays) is routed to
+        // renderShortV2 above, so this path only ever sees real v1 plans — but
+        // never let a missing overlays array throw "not iterable".
+        overlays: plan.overlays ?? [],
         subtitlesFilePath: srtPath ?? undefined,
         assFilePath: assPath ?? undefined,
         captionStyle: plan.captionStyle,
