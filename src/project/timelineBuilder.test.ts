@@ -219,4 +219,52 @@ describe("buildTimeline", () => {
     const cut = buildTimeline(minimal).events.find((e) => e.id === "c1")!;
     expect(cut.duration).toBe(3.5);
   });
+
+  it("summarises Shorts Schema v2 segments onto shortData (SS-5)", () => {
+    const v2 = EditListSchema.parse({
+      project_name: "x",
+      metadata: { duration_seconds: 600 },
+      longform: {},
+      shorts: [
+        {
+          short_id: "short_v2",
+          caption_style: "shorts_bold",
+          hook: { text: "Big hook", overlay: { motion_graphic_id: "topic_banner", params: { title: "H" }, duration_seconds: 3 } },
+          segments: [
+            {
+              segment_id: "seg_001",
+              start_time: "00:00:10.000",
+              end_time: "00:00:16.000",
+              energy: "high",
+              transition_in: "none",
+              transition_out: "punch_zoom",
+              overlays: [{ motion_graphic_id: "quote_card", params: { text: "QUOTE" }, appear_at_seconds: 1, duration_seconds: 3 }],
+              caption_emphasis: ["big"],
+            },
+            { segment_id: "seg_002", start_time: "00:01:00.000", end_time: "00:01:05.000", energy: "peak", transition_in: "cut", transition_out: "cut", overlays: [], caption_emphasis: [] },
+          ],
+        },
+      ],
+    });
+    const short = buildTimeline(v2).events.find((e) => e.kind === "short_in")!;
+    const segs = short.shortData!.segments;
+    expect(segs).toHaveLength(2);
+    expect(segs[0]).toMatchObject({ segmentId: "seg_001", inSeconds: 10, outSeconds: 16, energy: "high", transitionOut: "punch_zoom", captionEmphasis: ["big"] });
+    expect(segs[0].overlays[0]).toMatchObject({ motionGraphicId: "quote_card", appearAtSeconds: 1, durationSeconds: 3, text: "QUOTE" });
+    // Marker start = first segment source start; duration = assembled (6 + 5 = 11s).
+    expect(short.start).toBe(10);
+    expect(short.duration).toBe(11);
+  });
+
+  it("leaves shortData.segments empty for a legacy v1 clip short", () => {
+    const v1 = EditListSchema.parse({
+      project_name: "x",
+      metadata: { duration_seconds: 600 },
+      longform: {},
+      shorts: [{ short_id: "old", hook: "hi", start_time: "00:00:10.000", end_time: "00:00:40.000" }],
+    });
+    const short = buildTimeline(v1).events.find((e) => e.kind === "short_in")!;
+    expect(short.shortData!.segments).toEqual([]);
+    expect(short.duration).toBe(30); // legacy clip span
+  });
 });

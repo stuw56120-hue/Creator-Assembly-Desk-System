@@ -306,6 +306,22 @@ export function buildTimeline(editList: EditList): BuiltTimeline {
       const out = short.end_time ? parseTimecode(short.end_time) : start;
       duration = Math.max(0, out - start);
     }
+    // Summarise the v2 segments for the inspector (empty for a legacy v1 short).
+    const segmentSummaries = segments.map((s) => ({
+      segmentId: s.segment_id,
+      inSeconds: parseTimecode(s.start_time),
+      outSeconds: parseTimecode(s.end_time),
+      energy: s.energy ?? "medium",
+      transitionIn: s.transition_in ?? "cut",
+      transitionOut: s.transition_out ?? "cut",
+      overlays: (s.overlays ?? []).map((ov) => ({
+        motionGraphicId: ov.motion_graphic_id,
+        appearAtSeconds: ov.appear_at_seconds ?? 0,
+        durationSeconds: ov.duration_seconds,
+        text: typeof ov.params?.text === "string" ? ov.params.text : undefined,
+      })),
+      captionEmphasis: s.caption_emphasis ?? [],
+    }));
     events.push({
       id: short.short_id,
       kind: "short_in",
@@ -323,6 +339,7 @@ export function buildTimeline(editList: EditList): BuiltTimeline {
         captionStyle: short.caption_style,
         aspectRatio: short.framing?.aspect_ratio ?? "9:16",
         notes: short.notes,
+        segments: segmentSummaries,
       },
     });
   });

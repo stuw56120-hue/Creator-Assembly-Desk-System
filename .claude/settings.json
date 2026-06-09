@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(pnpm test *)",
+      "PowerShell(pnpm build *)",
+      "PowerShell(pnpm dev *)",
+      "PowerShell(pnpm exec vitest run *)",
+      "PowerShell(pnpm exec tsc *)",
+      "PowerShell(Remove-Item *__ss*.test.ts*)",
+      "PowerShell(Remove-Item *__*.mjs*)",
+      "PowerShell(python workers/*)",
+      "PowerShell(git add *)",
+      "PowerShell(git commit *)",
+      "PowerShell(ffprobe *)",
+      "PowerShell(ffmpeg *)",
+      "PowerShell(node *)",
+      "PowerShell(& \"C:\\Program Files\\Git\\cmd\\git.exe\" add *)",
+      "PowerShell(& \"C:\\Program Files\\Git\\cmd\\git.exe\" commit *)"
+    ]
+  }
+}

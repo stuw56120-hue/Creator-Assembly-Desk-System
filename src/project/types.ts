@@ -62,12 +62,34 @@ export interface ChapterData {
   y?: number;
 }
 
+/** A motion-graphic overlay inside a short segment (Shorts Schema v2). */
+export interface ShortSegmentOverlay {
+  motionGraphicId: string;
+  appearAtSeconds: number;
+  durationSeconds: number;
+  text?: string; // pulled from params.text for the inspector label, when present
+}
+
+/** One segment of a Shorts Schema v2 short, as shown/edited in the inspector. */
+export interface ShortSegmentSummary {
+  segmentId: string;
+  inSeconds: number; // source start
+  outSeconds: number; // source end
+  energy: string;
+  transitionIn: string;
+  transitionOut: string;
+  overlays: ShortSegmentOverlay[];
+  captionEmphasis: string[];
+}
+
 export interface ShortData {
   shortId: string;
   hook: string;
   captionStyle: string;
   aspectRatio: string;
   notes: string[];
+  /** Shorts Schema v2 segments. Empty for a legacy v1 clip short. */
+  segments: ShortSegmentSummary[];
 }
 
 /** A transcript caption segment (editable in the Caption Editor). */
