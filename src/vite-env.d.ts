@@ -137,15 +137,46 @@ interface CadsApi {
       captionStyle?: string;
       defaultName: string;
     }) => Promise<{ canceled: boolean; outputPath?: string }>;
-    short: (plan: {
-      sourcePath: string;
-      inSeconds: number;
-      outSeconds: number;
-      overlays: { inputPath: string; sourceStart: number; duration: number; placement: string; x?: number; y?: number; width?: number; fullFrame?: boolean; opacity?: number }[];
-      captions?: { sourceStart: number; duration: number; text: string }[];
-      captionStyle?: string;
-      defaultName: string;
-    }) => Promise<{ canceled: boolean; outputPath?: string }>;
+    short: (
+      plan:
+        | {
+            // v1 single-clip short
+            sourcePath: string;
+            inSeconds: number;
+            outSeconds: number;
+            overlays: { inputPath: string; sourceStart: number; duration: number; placement: string; x?: number; y?: number; width?: number; fullFrame?: boolean; opacity?: number }[];
+            captions?: { sourceStart: number; duration: number; text: string }[];
+            captionStyle?: string;
+            defaultName: string;
+          }
+        | {
+            // Shorts Schema v2 (segments[] present → assembled multi-segment path)
+            sourcePath: string;
+            segments: {
+              inSeconds: number;
+              outSeconds: number;
+              energy?: string;
+              transitionIn?: string;
+              transitionOut?: string;
+              overlays?: { inputPath: string; appearAtSeconds: number; durationSeconds: number }[];
+              emphasis?: string[];
+            }[];
+            hookOverlay?: { inputPath: string; appearAtSeconds: number; durationSeconds: number };
+            ctaOverlay?: { inputPath: string; appearAtSeconds: number; durationSeconds: number };
+            vttPath?: string;
+            captionWords?: { text: string; start: number; end: number }[];
+            captionStyle?: string;
+            quality?: "proxy" | "full";
+            fadeInSeconds?: number;
+            fadeOutSeconds?: number;
+            zoomPunchOnCut?: boolean;
+            defaultName: string;
+          },
+    ) => Promise<
+      | { canceled: true }
+      | { canceled: false; blocked: true; errors: string[] }
+      | { canceled: false; blocked?: false; outputPath?: string; quality?: "proxy" | "full"; contactSheet?: string; coverage?: number }
+    >;
     proxy: (args: {
       sourcePath: string;
       durationSeconds: number;
