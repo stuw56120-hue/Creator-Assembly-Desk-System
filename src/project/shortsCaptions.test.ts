@@ -136,4 +136,24 @@ describe("buildShortsCaptions", () => {
     const ass = buildShortsCaptions({ segments: [{ inSeconds: 500, outSeconds: 510, emphasis: [] }], words, captionStyle: "shorts_bold" });
     expect(ass).toBe("");
   });
+
+  it("caps shorts_bold at 3 words per line (SS-6)", () => {
+    // Eight short words → would fit on one width-wrapped line, but the 3-word
+    // cap must break them into lines of at most 3.
+    const shortWords: VttWord[] = "one two three four five six seven eight".split(" ").map((t, i) => ({
+      text: t,
+      start: i * 0.5,
+      end: i * 0.5 + 0.5,
+    }));
+    const ass = buildShortsCaptions({ segments: [{ inSeconds: 0, outSeconds: 5, emphasis: [] }], words: shortWords, captionStyle: "shorts_bold" });
+    const dialogues = ass.split("\n").filter((l) => l.startsWith("Dialogue:"));
+    expect(dialogues.length).toBeGreaterThan(0);
+    for (const d of dialogues) {
+      const text = d.split(",,")[1] ?? "";
+      for (const line of text.split("\\N")) {
+        const wordCount = (line.match(/\{\\k\d+\}/g) || []).length; // one {\k} per word
+        expect(wordCount).toBeLessThanOrEqual(3);
+      }
+    }
+  });
 });

@@ -11,13 +11,15 @@
 
 import { ipcMain, dialog, BrowserWindow, app, type IpcMainInvokeEvent } from "electron";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, stat, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, stat, rename, rm, writeFile, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
   buildLongformRenderArgs,
   buildProxyRenderArgs,
   buildShortRenderArgs,
+  buildShortsSegmentArgs,
+  buildShortStillsArgs,
   buildSrtContent,
   mapCaptionsForLongform,
   mapCaptionsForShort,
@@ -25,7 +27,11 @@ import {
   type KeepSegmentLike,
   type RenderOverlayInput,
   type RenderTransitionInput,
+  type ShortMgOverlay,
+  type ShortSegmentRenderInput,
 } from "../../src/project/renderExporter";
+import { buildShortsCaptions, parseVttWords, type VttWord } from "../../src/project/shortsCaptions";
+import { lintShortRender, assDialogueSpans, assembledVisibleSpans } from "../../src/project/shortsLint";
 import { buildAssContent, partitionCaptionsByStyle } from "../../src/project/assBuilder";
 import { getFfmpegPreset } from "../../src/config/presets";
 import {
@@ -245,6 +251,191 @@ interface ShortArgs {
   captions?: CaptionIpcInput[];
   captionStyle?: string;
   defaultName: string;
+  /** Presence of `segments` switches render:short to the Shorts Schema v2 path. */
+  segments?: ShortSegmentIpc[];
+}
+
+/* ── Shorts Schema v2 render path (SS-6) ──────────────────────────────────── */
+
+/** One assembled segment as it crosses the IPC boundary. */
+interface ShortSegmentIpc {
+  inSeconds: number;
+  outSeconds: number;
+  energy?: string;
+  transitionIn?: string;
+  transitionOut?: string;
+  overlays?: ShortMgOverlay[];
+  /** Words to highlight in this segment's captions. */
+  emphasis?: string[];
+}
+
+interface ShortV2Args {
+  sourcePath: string;
+  segments: ShortSegmentIpc[];
+  hookOverlay?: ShortMgOverlay;
+  ctaOverlay?: ShortMgOverlay;
+  /** Transcript VTT, parsed for caption word timing. */
+  vttPath?: string;
+  /** Pre-parsed caption words (used instead of vttPath if supplied). */
+  captionWords?: VttWord[];
+  captionStyle?: string;
+  /** "proxy" (default) renders a 720p preview for approval; "full" renders 1080p + cover. */
+  quality?: "proxy" | "full";
+  fadeInSeconds?: number;
+  fadeOutSeconds?: number;
+  zoomPunchOnCut?: boolean;
+  defaultName: string;
+}
+
+/** Escape a Windows path for use inside the FFmpeg `subtitles=filename='...'` filter. */
+function escapeSubtitlesPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/:/g, "\\:");
+}
+
+/**
+ * Shorts Schema v2 render. Builds captions from the transcript, runs the
+ * pre-render lint (blocks on plain-English errors), then renders either a 720p
+ * preview proxy (default — user approves before committing) or the full 1080p
+ * MP4 plus a per-segment contact sheet. Returns `{ blocked, errors }` when the
+ * lint refuses the render — never throws for a lint failure.
+ */
+async function renderShortV2(
+  event: IpcMainInvokeEvent,
+  plan: ShortV2Args,
+): Promise<
+  | { canceled: true }
+  | { canceled: false; blocked: true; errors: string[] }
+  | { canceled: false; blocked?: false; quality: "proxy" | "full"; outputPath: string; contactSheet?: string; coverage: number }
+> {
+  const quality = plan.quality ?? "proxy";
+  const frameWidth = quality === "proxy" ? 720 : 1080;
+  const frameHeight = quality === "proxy" ? 1280 : 1920;
+
+  // 1. Captions from the transcript words.
+  let words = plan.captionWords;
+  if (!words && plan.vttPath) {
+    try {
+      words = parseVttWords(await readFile(plan.vttPath, "utf8"));
+    } catch (err) {
+      console.warn(`[render:short v2] Could not read transcript ${plan.vttPath}: ${(err as Error).message} — rendering without captions.`);
+      words = [];
+    }
+  }
+  const ass = buildShortsCaptions({
+    segments: plan.segments.map((s) => ({ inSeconds: s.inSeconds, outSeconds: s.outSeconds, emphasis: s.emphasis ?? [] })),
+    words: words ?? [],
+    captionStyle: plan.captionStyle ?? "shorts_bold",
+    frameWidth,
+    frameHeight,
+  });
+
+  // 2. Pre-render lint — block on plain-English errors before spending a render.
+  const lint = lintShortRender({
+    segments: plan.segments.map((s, i) => ({
+      segmentId: `segment ${i + 1}`,
+      inSeconds: s.inSeconds,
+      outSeconds: s.outSeconds,
+      overlays: (s.overlays ?? []).map((o) => ({ appearAtSeconds: o.appearAtSeconds, durationSeconds: o.durationSeconds })),
+    })),
+    visibleSpans: assembledVisibleSpans({
+      segments: plan.segments,
+      hook: plan.hookOverlay,
+      cta: plan.ctaOverlay,
+      captionSpans: assDialogueSpans(ass),
+    }),
+  });
+  if (lint.errors.length > 0) {
+    console.warn(`[render:short v2] Lint blocked the render:\n${lint.errors.join("\n")}`);
+    return { canceled: false, blocked: true, errors: lint.errors };
+  }
+
+  const totalDuration = plan.segments.reduce((acc, s) => acc + Math.max(0, s.outSeconds - s.inSeconds), 0);
+  const renderSegments: ShortSegmentRenderInput[] = plan.segments.map((s) => ({
+    inSeconds: s.inSeconds,
+    outSeconds: s.outSeconds,
+    transitionIn: s.transitionIn ?? "cut",
+    transitionOut: s.transitionOut ?? "cut",
+    overlays: s.overlays ?? [],
+    energy: s.energy,
+  }));
+
+  // 3. Resolve the output path. Proxy → cached preview location (no dialog);
+  //    full → save dialog.
+  let outputPath: string;
+  if (quality === "proxy") {
+    const dir = path.join(app.getPath("userData"), "proxies");
+    await mkdir(dir, { recursive: true });
+    outputPath = path.join(dir, `${path.parse(plan.defaultName).name}-shorts-proxy.mp4`);
+  } else {
+    const win = senderWindow(event);
+    const save = await dialog.showSaveDialog(win ?? undefined!, {
+      title: "Render Short",
+      defaultPath: plan.defaultName,
+      filters: [{ name: "MP4 Video", extensions: ["mp4"] }],
+    });
+    if (save.canceled || !save.filePath) return { canceled: true };
+    outputPath = save.filePath;
+  }
+
+  // 4. Assemble (segments + transitions + overlays + Ken Burns/fades/zoom-punch),
+  //    then burn captions in a second pass. Both go through temp files so a
+  //    killed render never leaves a truncated MP4 at the final path.
+  const stamp = `${Date.now()}-${++__ffmpegRunCounter}`;
+  const tmpAssembled = path.join(os.tmpdir(), `cads-shortv2-asm-${stamp}.mp4`);
+  const tmpFinal = path.join(os.tmpdir(), `cads-shortv2-final-${stamp}.mp4`);
+  const assFile = ass ? path.join(os.tmpdir(), `cads-shortv2-${stamp}.ass`) : null;
+  try {
+    const assembleArgs = buildShortsSegmentArgs({
+      sourcePath: plan.sourcePath,
+      segments: renderSegments,
+      hookOverlay: plan.hookOverlay,
+      ctaOverlay: plan.ctaOverlay,
+      outputPath: tmpAssembled,
+      proxy: quality === "proxy",
+      fadeInSeconds: plan.fadeInSeconds ?? 0.3,
+      fadeOutSeconds: plan.fadeOutSeconds ?? 0.5,
+      zoomPunchOnCut: plan.zoomPunchOnCut ?? true,
+    });
+    const spilled = await spillLargeFilterComplex(assembleArgs);
+    await runFfmpeg(spilled.args, totalDuration, (percent) =>
+      event.sender.send("render:progress", { phase: "short", percent: Math.round(percent * 0.85) }),
+    );
+    if (spilled.cleanupFile) await rm(path.dirname(spilled.cleanupFile), { recursive: true, force: true }).catch(() => {});
+
+    if (assFile) {
+      await writeFile(assFile, ass, "utf8");
+      await runFfmpeg(
+        ["-i", tmpAssembled, "-vf", `subtitles=filename='${escapeSubtitlesPath(assFile)}'`, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy", "-y", tmpFinal],
+        totalDuration,
+        (percent) => event.sender.send("render:progress", { phase: "short", percent: 85 + Math.round(percent * 0.15) }),
+      );
+    } else {
+      await rename(tmpAssembled, tmpFinal);
+    }
+    await rename(tmpFinal, outputPath);
+
+    // 5. Full render → per-segment contact sheet alongside the MP4.
+    let contactSheet: string | undefined;
+    if (quality === "full") {
+      contactSheet = outputPath.replace(/\.mp4$/i, "") + "_contact.png";
+      try {
+        await runFfmpeg(
+          buildShortStillsArgs({ sourcePath: plan.sourcePath, segments: plan.segments.map((s) => ({ inSeconds: s.inSeconds, outSeconds: s.outSeconds })), outputPath: contactSheet }),
+          0,
+          () => {},
+        );
+      } catch (err) {
+        console.warn(`[render:short v2] Contact sheet failed (not fatal): ${(err as Error).message}`);
+        contactSheet = undefined;
+      }
+    }
+    event.sender.send("render:progress", { phase: "short", percent: 100 });
+    return { canceled: false, quality, outputPath, contactSheet, coverage: lint.coverage };
+  } finally {
+    await rm(tmpAssembled, { force: true }).catch(() => {});
+    await rm(tmpFinal, { force: true }).catch(() => {});
+    if (assFile) await rm(assFile, { force: true }).catch(() => {});
+  }
 }
 
 export function registerFfmpegHandlers(): void {
@@ -301,6 +492,13 @@ export function registerFfmpegHandlers(): void {
   });
 
   ipcMain.handle("render:short", async (event, plan: ShortArgs) => {
+    // Shorts Schema v2: a short carrying segments[] uses the assembled multi-
+    // segment path (captions + lint + proxy-first + contact sheet). A short
+    // without segments falls back to the v1 single-clip path below.
+    if (Array.isArray(plan.segments) && plan.segments.length > 0) {
+      return renderShortV2(event, plan as unknown as ShortV2Args);
+    }
+
     const win = senderWindow(event);
     const save = await dialog.showSaveDialog(win ?? undefined!, {
       title: "Render Short",

@@ -726,7 +726,15 @@ export interface ShortSegmentRenderInput {
   transitionIn: string; // effect as this segment ENTERS
   transitionOut: string; // effect as this segment LEAVES
   overlays: ShortMgOverlay[];
+  /** "peak" segments get a slow Ken Burns zoom (SS-6). Others render static. */
+  energy?: string;
 }
+
+/** Ken Burns max zoom applied to a "peak" energy segment (SS-6). */
+export const PEAK_KEN_BURNS_ZOOM = 1.25;
+/** Micro zoom-punch applied at every plain-cut boundary when enabled (SS-6). */
+export const CUT_ZOOM_PUNCH_SCALE = 1.04;
+const CUT_ZOOM_PUNCH_SECONDS = 0.18;
 
 export interface ShortsSegmentRenderPlan {
   sourcePath: string;
@@ -740,7 +748,18 @@ export interface ShortsSegmentRenderPlan {
   frameWidth?: number; // default 1080
   frameHeight?: number; // default 1920
   preset?: RenderPreset;
+  /** Render a 720×1280 preview proxy instead of full 1080×1920 (SS-6 proxy-first). */
+  proxy?: boolean;
+  /** Fade the whole short in over this many seconds at t=0 (SS-6). */
+  fadeInSeconds?: number;
+  /** Fade out over this many seconds, ending just before the CTA / at the tail (SS-6). */
+  fadeOutSeconds?: number;
+  /** Add a subtle 1.04× zoom-punch at every plain-cut boundary (SS-6). */
+  zoomPunchOnCut?: boolean;
 }
+
+/** Proxy frame size — 720×1280 (9:16). */
+const PROXY_FRAME = { width: 720, height: 1280 };
 
 /** A real (effect-bearing) transition? cut / none / unknown → false. */
 function isEffectTransition(t: string): boolean {
@@ -782,8 +801,8 @@ export function boundaryEffect(transitionOut: string, transitionIn: string): str
  * horizontally until a vertical MG treatment exists. Assembly is correct.
  */
 export function buildShortsSegmentArgs(plan: ShortsSegmentRenderPlan): string[] {
-  const frameW = plan.frameWidth ?? 1080;
-  const frameH = plan.frameHeight ?? 1920;
+  const frameW = plan.proxy ? PROXY_FRAME.width : plan.frameWidth ?? 1080;
+  const frameH = plan.proxy ? PROXY_FRAME.height : plan.frameHeight ?? 1920;
   const segs = plan.segments;
 
   // Cumulative output offsets (assembled-timeline start of each segment).
@@ -820,13 +839,23 @@ export function buildShortsSegmentArgs(plan: ShortsSegmentRenderPlan): string[] 
   const args: string[] = ["-i", plan.sourcePath];
   for (const p of overlayPaths) args.push(...overlayInputArgs(p));
 
-  // Per-segment trim → 9:16 crop → scale, then concat video+audio.
+  // Per-segment trim → 9:16 crop → scale, then concat video+audio. "peak"
+  // segments get a slow Ken Burns zoom (1.0 → 1.25 over the segment).
   const parts: string[] = [];
   segs.forEach((seg, i) => {
-    parts.push(
+    const base =
       `[0:v]trim=start=${seg.inSeconds}:end=${seg.outSeconds},setpts=PTS-STARTPTS,` +
-        `crop=w=ih*9/16:h=ih,scale=${frameW}:${frameH},setsar=1[sv${i}]`,
-    );
+      `crop=w=ih*9/16:h=ih,scale=${frameW}:${frameH},setsar=1`;
+    if (seg.energy === "peak") {
+      const segFrames = Math.max(1, Math.round(Math.max(0, seg.outSeconds - seg.inSeconds) * 30));
+      const step = (PEAK_KEN_BURNS_ZOOM - 1).toFixed(2);
+      parts.push(
+        `${base},zoompan=z='min(1.0+${step}*on/${segFrames}\\,${PEAK_KEN_BURNS_ZOOM})':d=1:` +
+          `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${frameW}x${frameH}:fps=30[sv${i}]`,
+      );
+    } else {
+      parts.push(`${base}[sv${i}]`);
+    }
     parts.push(
       `[0:a]atrim=start=${seg.inSeconds}:end=${seg.outSeconds},asetpts=PTS-STARTPTS[sa${i}]`,
     );
@@ -836,6 +865,7 @@ export function buildShortsSegmentArgs(plan: ShortsSegmentRenderPlan): string[] 
 
   // One transition effect per boundary, at its assembled-timeline output time.
   const transitions: { outStart: number; type: string }[] = [];
+  const cutBoundaries: number[] = [];
   for (let i = 0; i < segs.length - 1; i++) {
     const tb = offsets[i + 1]; // boundary = end of seg i = start of seg i+1
     const effect = boundaryEffect(segs[i].transitionOut, segs[i + 1].transitionIn);
@@ -847,19 +877,108 @@ export function buildShortsSegmentArgs(plan: ShortsSegmentRenderPlan): string[] 
       });
     } else if (effect === "smash_cut" || effect === "flash_white") {
       transitions.push({ outStart: tb, type: "smash_cut" }); // both → white flash
+    } else {
+      cutBoundaries.push(tb); // plain cut → eligible for the micro zoom-punch
     }
-    // whip_pan / cut → no filter (clean cut)
   }
   const { parts: transParts, finalLabel: afterTransitions } = buildTransitionChain("[cv]", transitions);
   parts.push(...transParts);
+  let current = afterTransitions;
+
+  // SS-6: a subtle 1.04× zoom-punch at every plain-cut boundary, overlaid only
+  // during a brief window so the rest of the clip is untouched.
+  if (plan.zoomPunchOnCut && cutBoundaries.length > 0) {
+    const win = cutBoundaries
+      .map((t) => `between(t,${t},${Number((t + CUT_ZOOM_PUNCH_SECONDS).toFixed(3))})`)
+      .join("+");
+    parts.push(`${current}split=2[cpb][cps]`);
+    parts.push(
+      `[cps]scale=iw*${CUT_ZOOM_PUNCH_SCALE}:ih*${CUT_ZOOM_PUNCH_SCALE},` +
+        `crop=iw/${CUT_ZOOM_PUNCH_SCALE}:ih/${CUT_ZOOM_PUNCH_SCALE}[cpz]`,
+    );
+    parts.push(`[cpb][cpz]overlay=x=0:y=0:enable='${win}'[cpv]`);
+    current = "[cpv]";
+  }
+
+  // SS-6: fade in at the start; fade out ending just before the CTA (or at the
+  // tail), so the short opens and closes cleanly.
+  const fadeIn = plan.fadeInSeconds ?? 0;
+  const fadeOut = plan.fadeOutSeconds ?? 0;
+  if (fadeIn > 0) {
+    parts.push(`${current}fade=t=in:st=0:d=${fadeIn}[fi]`);
+    current = "[fi]";
+  }
+  if (fadeOut > 0) {
+    const ctaStart = plan.ctaOverlay ? totalDuration - plan.ctaOverlay.durationSeconds : totalDuration;
+    const st = Math.max(0, Number((ctaStart - fadeOut).toFixed(3)));
+    parts.push(`${current}fade=t=out:st=${st}:d=${fadeOut}[fo]`);
+    current = "[fo]";
+  }
 
   // Composite the MG overlays at their assembled output times.
-  const { parts: overlayParts, finalLabel } = buildOverlayChain(afterTransitions, mapped, frameW, frameH);
+  const { parts: overlayParts, finalLabel } = buildOverlayChain(current, mapped, frameW, frameH);
   parts.push(...overlayParts);
 
   args.push("-filter_complex", parts.join(";"), "-map", finalLabel, "-map", "[ca]");
   args.push(...encodeArgs(plan.preset), "-y", plan.outputPath);
   return args;
+}
+
+/**
+ * Build the FFmpeg argv to extract one still per segment at its assembled-timeline
+ * MIDPOINT and tile them into a single contact-sheet PNG (SS-6). The stills come
+ * from the SAME source trims as the render (9:16 crop + scale), so the sheet
+ * previews exactly what each segment looks like. `tileCols` defaults to 3.
+ */
+export function buildShortStillsArgs(plan: {
+  sourcePath: string;
+  segments: { inSeconds: number; outSeconds: number }[];
+  outputPath: string;
+  tileCols?: number;
+  thumbWidth?: number; // each tile width; height follows 9:16
+}): string[] {
+  const segs = plan.segments;
+  const cols = Math.max(1, plan.tileCols ?? 3);
+  const rows = Math.max(1, Math.ceil(segs.length / cols));
+  const w = plan.thumbWidth ?? 360;
+  const h = Math.round((w * 16) / 9);
+  const args: string[] = ["-i", plan.sourcePath];
+  const parts: string[] = [];
+  segs.forEach((seg, i) => {
+    const mid = Number(((seg.inSeconds + seg.outSeconds) / 2).toFixed(3));
+    // One frame at the segment midpoint, cropped 9:16 and scaled to the tile size.
+    parts.push(
+      `[0:v]trim=start=${mid}:end=${Number((mid + 0.04).toFixed(3))},setpts=PTS-STARTPTS,` +
+        `crop=w=ih*9/16:h=ih,scale=${w}:${h},setsar=1[t${i}]`,
+    );
+  });
+  const tileInputs = segs.map((_, i) => `[t${i}]`).join("");
+  parts.push(`${tileInputs}xstack=inputs=${segs.length}:layout=${xstackLayout(segs.length, cols)}:fill=black[sheet]`);
+  args.push(
+    "-filter_complex",
+    parts.join(";"),
+    "-map",
+    "[sheet]",
+    "-frames:v",
+    "1",
+    "-y",
+    plan.outputPath,
+  );
+  void rows; // layout already encodes rows
+  return args;
+}
+
+/** xstack `layout` string placing N tiles into a `cols`-wide grid. */
+export function xstackLayout(n: number, cols: number): string {
+  const cells: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const x = c === 0 ? "0" : Array.from({ length: c }, (_, k) => `w${k}`).join("+");
+    const y = r === 0 ? "0" : Array.from({ length: r }, (_, k) => `h${k * cols}`).join("+");
+    cells.push(`${x}_${y}`);
+  }
+  return cells.join("|");
 }
 
 /** Proxy generation: downscale to a fast preview MP4 (preview source, never the 42-min original). */

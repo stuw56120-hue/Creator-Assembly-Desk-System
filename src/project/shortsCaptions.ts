@@ -85,6 +85,8 @@ interface ShortsCaptionStyleDef {
   marginVFrac: number;
   maxWidthPx: number;
   maxLines: number;
+  /** Hard cap on words per line, in addition to the width-based wrap (SS-6). */
+  maxWordsPerLine?: number;
   borderStyle: number; // 1 = outline+shadow, 3 = opaque box (pill)
   outline: number;
   shadow: number;
@@ -104,6 +106,7 @@ export const SHORTS_CAPTION_STYLES: Record<string, ShortsCaptionStyleDef> = {
     marginVFrac: 0.35,
     maxWidthPx: 920,
     maxLines: 2,
+    maxWordsPerLine: 3, // SS-6: shorts_bold lines hold at most 3 words
     borderStyle: 1,
     outline: 3,
     shadow: 2,
@@ -209,29 +212,45 @@ export function placeSegmentWords(
   return placed;
 }
 
-/** Greedily group placed words into chunks that fit within maxLines × maxChars. */
-function chunkWords(words: PlacedWord[], maxChars: number, maxLines: number): PlacedWord[][] {
+/**
+ * Greedily group placed words into chunks that fit within maxLines lines, where
+ * a line breaks at maxChars (width) OR maxWords (a hard per-line word cap, e.g.
+ * shorts_bold's 3). Must mirror chunkBody's break logic so a chunk really spans
+ * ≤ maxLines lines.
+ */
+function chunkWords(
+  words: PlacedWord[],
+  maxChars: number,
+  maxLines: number,
+  maxWords?: number,
+): PlacedWord[][] {
   const chunks: PlacedWord[][] = [];
   let cur: PlacedWord[] = [];
   let lines = 1;
   let lineLen = 0;
+  let lineWords = 0;
   for (const w of words) {
     const wlen = w.text.length;
     const extra = lineLen > 0 ? 1 : 0;
-    if (lineLen > 0 && lineLen + extra + wlen > maxChars) {
+    const overChars = lineLen > 0 && lineLen + extra + wlen > maxChars;
+    const overWords = maxWords != null && lineWords >= maxWords;
+    if (overChars || overWords) {
       // This word starts a new line.
       if (lines + 1 > maxLines) {
         chunks.push(cur);
         cur = [];
         lines = 1;
         lineLen = 0;
+        lineWords = 0;
       } else {
         lines += 1;
         lineLen = 0;
+        lineWords = 0;
       }
     }
     cur.push(w);
     lineLen += (lineLen > 0 ? 1 : 0) + wlen;
+    lineWords += 1;
   }
   if (cur.length) chunks.push(cur);
   return chunks;
@@ -249,13 +268,17 @@ function chunkBody(chunk: PlacedWord[], maxChars: number, style: ShortsCaptionSt
   const endHold = chunk[chunk.length - 1].outEnd + CHUNK_HOLD_SECONDS;
   const out: string[] = [];
   let lineLen = 0;
+  let lineWords = 0;
   for (let i = 0; i < chunk.length; i++) {
     const w = chunk[i];
     const wlen = w.text.length;
     const extra = lineLen > 0 ? 1 : 0;
-    if (lineLen > 0 && lineLen + extra + wlen > maxChars) {
+    const overChars = lineLen > 0 && lineLen + extra + wlen > maxChars;
+    const overWords = style.maxWordsPerLine != null && lineWords >= style.maxWordsPerLine;
+    if (overChars || overWords) {
       out.push("\\N");
       lineLen = 0;
+      lineWords = 0;
     } else if (i > 0) {
       out.push(" ");
       lineLen += 1;
@@ -269,6 +292,7 @@ function chunkBody(chunk: PlacedWord[], maxChars: number, style: ShortsCaptionSt
         : txt;
     out.push(`{\\k${k}}${coloured}`);
     lineLen += wlen;
+    lineWords += 1;
   }
   return out.join("");
 }
@@ -319,7 +343,7 @@ export function buildShortsCaptions(plan: ShortsCaptionsPlan): string {
     const placed = placeSegmentWords(plan.words, seg.inSeconds, seg.outSeconds, offset, emphasisWordSet(seg.emphasis));
     offset += segDur;
     if (placed.length === 0) continue;
-    for (const chunk of chunkWords(placed, maxChars, style.maxLines)) {
+    for (const chunk of chunkWords(placed, maxChars, style.maxLines, style.maxWordsPerLine)) {
       const start = assTime(chunk[0].outStart);
       const end = assTime(chunk[chunk.length - 1].outEnd + CHUNK_HOLD_SECONDS);
       dialogues.push(`Dialogue: 0,${start},${end},Shorts,,0,0,0,,${chunkBody(chunk, maxChars, style)}`);

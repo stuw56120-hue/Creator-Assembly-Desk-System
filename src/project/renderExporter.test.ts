@@ -4,7 +4,9 @@ import {
   buildLongformRenderArgs,
   buildShortRenderArgs,
   buildShortsSegmentArgs,
+  buildShortStillsArgs,
   buildSrtContent,
+  xstackLayout,
   captionForceStyle,
   mapCaptionsForLongform,
   mapCaptionsForShort,
@@ -835,5 +837,92 @@ describe("buildShortsSegmentArgs (SS-2)", () => {
     expect(f).toContain("enable='between(t,18,20)'"); // cta over tail: total 20 - 2 = 18
     // input order: source, hook, cta → both decoded with libvpx-vp9
     expect(args.indexOf("hook.webm")).toBeLessThan(args.indexOf("cta.webm"));
+  });
+});
+
+describe("buildShortsSegmentArgs SS-6 features", () => {
+  const seg = (inS: number, extra: Partial<import("./renderExporter").ShortSegmentRenderInput> = {}) => ({
+    inSeconds: inS,
+    outSeconds: inS + 5,
+    transitionIn: "cut",
+    transitionOut: "cut",
+    overlays: [],
+    ...extra,
+  });
+  const basePlan = (extra: Partial<import("./renderExporter").ShortsSegmentRenderPlan> = {}) => ({
+    sourcePath: "src.mp4",
+    segments: [seg(0), seg(10), seg(20), seg(30)],
+    outputPath: "out.mp4",
+    ...extra,
+  });
+  const fc = (args: string[]) => args[args.indexOf("-filter_complex") + 1];
+
+  it("applies a Ken Burns 1.25x zoom to peak segments only", () => {
+    const plan = basePlan();
+    plan.segments[1] = seg(10, { energy: "peak" });
+    const f = fc(buildShortsSegmentArgs(plan));
+    expect(f).toContain("zoompan=z='min(1.0+0.25*on/");
+    expect(f).toContain(",1.25)"); // max zoom
+    // only one zoompan (the single peak segment)
+    expect((f.match(/zoompan=/g) || []).length).toBe(1);
+  });
+
+  it("renders no zoompan when no segment is peak", () => {
+    expect(fc(buildShortsSegmentArgs(basePlan()))).not.toContain("zoompan");
+  });
+
+  it("scales to the 720x1280 proxy frame in proxy mode", () => {
+    const f = fc(buildShortsSegmentArgs(basePlan({ proxy: true })));
+    expect(f).toContain("scale=720:1280");
+    expect(f).not.toContain("scale=1080:1920");
+  });
+
+  it("adds fade-in at t=0 and fade-out ending just before the CTA", () => {
+    const plan = basePlan({
+      fadeInSeconds: 0.3,
+      fadeOutSeconds: 0.5,
+      ctaOverlay: { inputPath: "cta.webm", appearAtSeconds: 0, durationSeconds: 2 },
+    });
+    const f = fc(buildShortsSegmentArgs(plan));
+    expect(f).toContain("fade=t=in:st=0:d=0.3");
+    // total 20s, cta 2s → ctaStart 18, fade-out starts 18 - 0.5 = 17.5
+    expect(f).toContain("fade=t=out:st=17.5:d=0.5");
+  });
+
+  it("adds a 1.04x zoom-punch at every plain-cut boundary when enabled", () => {
+    const f = fc(buildShortsSegmentArgs(basePlan({ zoomPunchOnCut: true })));
+    expect(f).toContain("scale=iw*1.04:ih*1.04,crop=iw/1.04:ih/1.04");
+    // cut boundaries at 5, 10, 15
+    expect(f).toContain("between(t,5,5.18)");
+    expect(f).toContain("between(t,10,10.18)");
+    expect(f).toContain("between(t,15,15.18)");
+  });
+
+  it("omits the cut zoom-punch when the flag is off", () => {
+    expect(fc(buildShortsSegmentArgs(basePlan()))).not.toContain("scale=iw*1.04");
+  });
+});
+
+describe("buildShortStillsArgs + xstackLayout (SS-6 contact sheet)", () => {
+  it("extracts one midpoint still per segment and tiles them", () => {
+    const args = buildShortStillsArgs({
+      sourcePath: "src.mp4",
+      segments: [
+        { inSeconds: 0, outSeconds: 6 }, // midpoint 3
+        { inSeconds: 10, outSeconds: 16 }, // midpoint 13
+      ],
+      outputPath: "sheet.png",
+    });
+    const f = args[args.indexOf("-filter_complex") + 1];
+    expect(f).toContain("trim=start=3:");
+    expect(f).toContain("trim=start=13:");
+    expect(f).toContain("crop=w=ih*9/16:h=ih");
+    expect(f).toContain("xstack=inputs=2");
+    expect(args.slice(-4)).toEqual(["-frames:v", "1", "-y", "sheet.png"]);
+  });
+
+  it("lays tiles into a cols-wide grid", () => {
+    expect(xstackLayout(4, 3)).toBe("0_0|w0_0|w0+w1_0|0_h0");
+    expect(xstackLayout(2, 3)).toBe("0_0|w0_0");
   });
 });
